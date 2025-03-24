@@ -1,0 +1,10 @@
+(def adder (fn []
+                (def a 1)
+                (fn []
+                      (set a (+ a 1))
+                      a)))
+
+(def add1 (adder))
+
+(print (add1))
+(print (add1))

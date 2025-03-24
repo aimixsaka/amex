@@ -1,0 +1,6 @@
+(def fac (fn fac [n]
+              (if (= n 1)
+                  1
+                  (* n (fac (- n 1))))))
+
+(print (fac 3))

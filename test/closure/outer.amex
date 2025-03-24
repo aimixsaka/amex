@@ -1,0 +1,7 @@
+(def outer (fn []
+                (def x "outer")
+                (def inner (fn [] x))
+                inner))
+
+(def closure (outer))
+(print (closure))

@@ -1,18 +1,11 @@
 ## Overview
-* Yet another lisp like language.
-* Stack-based VM.
 
-## Architecture
-```
-source code ---------> Token ----------> Value(Form/Number...)
-             Scanner            Parser     |
-                                           | Compiler
-                                           |
-                                           v
-                                         Function(contains Chunk(a.k.a. bytecode))
-                                           |
-                                           | VM
-                                           |
-                                           v
-                                         (result)
-```
+- Janet inspired syntax.
+- Stack-based VM.
+- Learning purpose toy language.
+- Lisp explanation of `amex`.
+
+## Reference
+
+- [Janet](https://github.com/janet-lang/janet)
+- [Crafting Interpreters](https://craftinginterpreters.com/contents.html)

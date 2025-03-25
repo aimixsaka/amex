@@ -5,6 +5,11 @@
 - Learning purpose toy language.
 - Lisp explanation of `amex`.
 
+## Status
+
+**A lot** can be done: memory management, optimization(computed goto, unbox...)...
+Always WIP...
+
 ## Reference
 
 - [Janet](https://github.com/janet-lang/janet)

@@ -34,17 +34,17 @@ void print_value(Value *v, const char *sep)
 	case TYPE_SYMBOL:
 		printf("%s%s", (v->data.string)->chars, sep);
 		break;
-	case TYPE_FORM:
+	case TYPE_TUPLE:
 	case TYPE_ARRAY: {
 		Array *form = AS_ARRAY(*v);
 		int len = form->count;
-		printf("%s", (v->type == TYPE_FORM) ? "(" : "[");
+		printf("%s", (v->type == TYPE_TUPLE) ? "(" : "[");
 		for (int i = 0; i < len - 1; ++i) {
 			print_value(&form->values[i], " ");
 		}
 		print_value(&form->values[len - 1], "");
 		printf("%s%s",
-		       (v->type == TYPE_FORM) ? ")" : "]", sep);
+		       (v->type == TYPE_TUPLE) ? ")" : "]", sep);
 		break;
 	}
 	case TYPE_FUNCTION:

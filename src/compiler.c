@@ -571,7 +571,7 @@ static void compile_form(uint8_t elemn, const Value *elms)
 		emit_bytes(OP_CALL, argn);
 		break;
 	}
-	case TYPE_FORM:
+	case TYPE_TUPLE:
 		compile_form(head.data.array->count, head.data.array->values);
 		for (int i = 1; i < elemn; ++i) {
 			compile_ast(&elms[i]);
@@ -601,7 +601,7 @@ static void compile_ast(const Value *ast)
 	case TYPE_SYMBOL:
 		compile_symbol(AS_STRING(*ast), true);
 		break;
-	case TYPE_FORM: {
+	case TYPE_TUPLE: {
 		compile_form(ast->data.array->count, ast->data.array->values);
 		break;
 	}

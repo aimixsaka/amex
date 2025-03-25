@@ -156,7 +156,7 @@ static void parser_push(Parser *p, ParserType type)
 		top->buf.string.buffer = new_buffer(8);
 		break;
 	case PTYPE_ARRAY:
-	case PTYPE_FORM:
+	case PTYPE_TUPLE:
 		top->buf.array = new_array(8);
 		break;
 	case PTYPE_TABLE:
@@ -202,12 +202,12 @@ static void parser_top_append(Parser *p, Value x)
 		spe_form = top->buf.spe_form;
 		write_array(arr2, spe_form);
 		write_array(arr2, x);
-		pair.type = TYPE_FORM;
+		pair.type = TYPE_TUPLE;
 		pair.data.array = arr2;
 		parser_top_append(p, pair);
 	}
 	case PTYPE_ARRAY:
-	case PTYPE_FORM:
+	case PTYPE_TUPLE:
 		write_array(top->buf.array, x);
 		break;
 	case PTYPE_TABLE:
@@ -274,7 +274,7 @@ static Value buf_build_token(Parser *p, Buffer *buf)
 static int main_state(Parser *p, char c)
 {
 	if (c == '(') {
-		parser_push(p, PTYPE_FORM);
+		parser_push(p, PTYPE_TUPLE);
 		return 1;
 	}
 	if (c == '[') {
@@ -339,7 +339,7 @@ static int form_state(Parser *p, const char c)
 		ParseState *top = parser_pop(p);
 		Array *array = top->buf.array;
 		Value x;
-		x.type = TYPE_FORM;
+		x.type = TYPE_TUPLE;
 		x.data.array = array;
 		parser_top_append(p, x);
 		return 1;
@@ -457,7 +457,7 @@ static int special_char_state(Parser *p, const char c)
 {
 	ParseState *top = parser_peek(p);
 	Value spe_form;
-	spe_form.type = TYPE_FORM;
+	spe_form.type = TYPE_TUPLE;
 	switch (c) {
 	case '\'':	/* quote */
 		spe_form.data.string = copy_string("quote", 5);
@@ -485,7 +485,7 @@ static bool check_eof(Parser *p, ParseState *state, const char c)
 			return true;
 		}
 	case PTYPE_TOKEN:
-	case PTYPE_FORM:
+	case PTYPE_TUPLE:
 	case PTYPE_ARRAY:
 	case PTYPE_STRING:
 	case PTYPE_TABLE:
@@ -510,7 +510,7 @@ static int dispatch_char(Parser *p, const char c) {
 		case PTYPE_TOKEN:
 			done = token_state(p, c);
 			break;
-		case PTYPE_FORM:
+		case PTYPE_TUPLE:
 			done = form_state(p, c);
 			break;
 		case PTYPE_ARRAY:

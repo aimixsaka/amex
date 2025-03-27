@@ -80,25 +80,26 @@ static void emit_bytes(uint8_t byte1, uint8_t byte2)
 	write_chunk(current_chunk(), byte2);
 }
 
-static void init_compiler(VM *vm, Compiler *compiler, FunctionType type, String *fname)
+static void init_compiler(VM *vm, Compiler *c, FunctionType type, String *fname)
 {
 	/* store previous compiler */
-	compiler->vm = vm;
-	compiler->enclosing = current;
-	compiler->type = type;
-	compiler->constant_count = 0;
-	compiler->local_count = 0;
-	compiler->scope_depth = 0;
-	compiler->function = new_function(compiler->vm);
+	c->vm = vm;
+	c->enclosing = current;
+	c->type = type;
+	c->constant_count = 0;
+	c->local_count = 0;
+	c->scope_depth = 0;
+	c->quote_level = 0;
+	c->function = new_function(c->vm);
 	if (type != SCRIPT_TYPE && fname)
-		compiler->function->name = copy_string(compiler->vm, fname->chars, fname->length);
-	Local *local = &compiler->locals[compiler->local_count++];
+		c->function->name = copy_string(c->vm, fname->chars, fname->length);
+	Local *local = &c->locals[c->local_count++];
 	local->name = fname;
 	local->depth = 0;
 	local->is_captured = false;
 	local->index = 0;
-	++compiler->constant_count;
-	current = compiler;
+	++c->constant_count;
+	current = c;
 }
 
 static Function *end_compiler()

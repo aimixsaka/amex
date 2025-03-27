@@ -90,7 +90,6 @@ static void init_compiler(VM *vm, Compiler *c, FunctionType type, String *fname)
 	c->constant_count = 0;
 	c->local_count = 0;
 	c->scope_depth = 0;
-	c->quote_level = 0;
 	c->function = new_function(c->vm);
 	if (type != SCRIPT_TYPE && fname)
 		c->function->name = copy_string(c->vm, fname->chars, fname->length);

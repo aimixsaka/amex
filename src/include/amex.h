@@ -73,7 +73,7 @@ typedef struct Value {
 
 #define IS_NIL(value)		((value).type == TYPE_NIL)
 #define IS_BOOL(value)		((value).type == TYPE_BOOL)
-#define IS_SYMBOL(value)	(value).type == TYPE_SYMBOL)
+#define IS_SYMBOL(value)	((value).type == TYPE_SYMBOL)
 #define IS_NUMBER(value)	((value).type == TYPE_NUMBER)
 #define IS_STRING(value)	((value).type == TYPE_STRING)
 #define IS_ARRAY(value)		((value).type == TYPE_ARRAY)

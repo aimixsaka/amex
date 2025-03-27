@@ -44,10 +44,14 @@ static void repl()
 				printf(" ");
 			printf("^\n");
 			printf("\nParse error: %s\n", p.error);
-			free_parser(&p);
 			continue;
 		}
 
+#ifdef DEBUG_TRACE_EXECUTION
+		puts("**** dump ast start ****");
+		print_value(&p.value, "\n");
+		puts("**** dump ast end ****");
+#endif /* DEBUG_TRACE_EXECUTION */
 		/* Compile to Function(which contains bytecode) */
 		f = compile(&vm, p.value);
 		if (f == NULL)
@@ -125,7 +129,6 @@ static void run_file(const char *path)
 			// printf("\nParse error: %s\n", p.error);
 			
 			printf("Parse error: %s\n", p.error);
-			free_parser(&p);
 			exit(65);
 		}
 		if (*reader == '\0')
@@ -147,6 +150,7 @@ static void run_file(const char *path)
 			exit(67);
 	}
 	free(source);
+	free_parser(&p);
 	free_vm(&vm);
 }
 

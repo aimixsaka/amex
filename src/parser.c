@@ -33,11 +33,9 @@ static bool is_symbol_char(const char c)
 	       (c >= 'a' && c <= 'z') ||
 	       (c >= 'A' && c <= 'Z') ||
 	       (c >= '<' && c <= '@') ||
-	       (c >= '*' && c <= '/') ||
 	       (c >= '#' && c <= '&') ||
-	       (c == '_') ||
-	       (c == '^') ||
-	       (c == '!');
+	       (c >= '*' && c <= '/' && c != ',') ||
+	       (c == '_') || (c == '^') || (c == '!');
 }
 
 static bool is_special_char(const char c)
@@ -158,10 +156,7 @@ static void parser_push(Parser *p, ParserType type)
 		top->buf.table_state.key_found = false;
 		break;
 	case PTYPE_SPECIAL_FORM:
-		/*
-		 * We handle special chars(' ~ , ;) in
-		 * special_char_state() and parser_top_append().
-		 */
+		top->buf.array = new_array(p->vm, 2);
 		break;
 	}
 }
@@ -188,17 +183,13 @@ static void parser_top_append(Parser *p, Value x)
 		p->status = PARSER_FULL; /* Parsed a full lisp form */
 		break;
 	case PTYPE_SPECIAL_FORM: {
-		Value pair, spe_form;
-		Array *arr2 = new_array(p->vm, 2);
-		ParseState *top = parser_peek(p);
+		write_array(top->buf.array, x);
+		Value y;
+		y.type = TYPE_TUPLE;
+		y.data.array = top->buf.array;
 		parser_pop(p);
-
-		spe_form = top->buf.spe_form;
-		write_array(arr2, spe_form);
-		write_array(arr2, x);
-		pair.type = TYPE_TUPLE;
-		pair.data.array = arr2;
-		parser_top_append(p, pair);
+		parser_top_append(p, y);
+		break;
 	}
 	case PTYPE_ARRAY:
 	case PTYPE_TUPLE:
@@ -285,12 +276,12 @@ static int main_state(Parser *p, char c)
 	}
 	if (is_whitespace(c))
 		return 1;
-	if (is_symbol_char(c)) {
-		parser_push(p, PTYPE_TOKEN);
-		return 0;
-	}
 	if (is_special_char(c)) {
 		parser_push(p, PTYPE_SPECIAL_FORM);
+		return 0;
+	}
+	if (is_symbol_char(c)) {
+		parser_push(p, PTYPE_TOKEN);
 		return 0;
 	}
 	PERROR(p, "Unexpected character.");
@@ -449,25 +440,32 @@ static int table_state(Parser *p, const char c) {
  */
 static int special_char_state(Parser *p, const char c)
 {
-	ParseState *top = parser_peek(p);
-	Value spe_form;
-	spe_form.type = TYPE_TUPLE;
-	switch (c) {
-	case '\'':	/* quote */
-		spe_form.data.string = copy_string(p->vm, "quote", 5);
-		break;
-	case '~':	/* quasiquote */
-		spe_form.data.string = copy_string(p->vm, "quasiquote", 10);
-		break;
-	case ',':	/* unquote */
-		spe_form.data.string = copy_string(p->vm, "unquote", 7);
-		break;
-	case ';':	/* splice */
-		spe_form.data.string = copy_string(p->vm, "splice", 6);
-		break;
+	if (is_special_char(c)) {
+		String *qs;
+		Value v;
+		v.type = TYPE_SYMBOL;
+		ParseState *top = parser_peek(p);
+		Array *quote_pair = top->buf.array;
+		switch (c) {
+		case '\'':	/* quote */
+			qs = copy_string(p->vm, "quote", 5);
+			break;
+		case '~':	/* quasiquote */
+			qs = copy_string(p->vm, "quasiquote", 10);
+			break;
+		case ',':	/* unquote */
+			qs = copy_string(p->vm, "unquote", 7);
+			break;
+		case ';':	/* splice */
+			qs = copy_string(p->vm, "splice", 6);
+			break;
+		}
+		v.data.string = qs;
+		write_array(quote_pair, v);
+		return 1;
+	} else {
+		return main_state(p, c);
 	}
-	top->buf.spe_form = spe_form;
-	return 1;
 }
 
 static bool check_eof(Parser *p, ParseState *state, const char c)

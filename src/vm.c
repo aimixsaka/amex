@@ -15,7 +15,6 @@ static void reset_stack(VM *vm)
 
 void init_vm(VM *vm)
 {
-	vm->stack.count = 0;
 	vm->stack.capacity = 0;
 	vm->stack.values = NULL;
 	reset_stack(vm);
@@ -56,15 +55,14 @@ static void runtime_error(VM *vm, const char *format, ...)
 
 static bool push(VM *vm, CallFrame *frame, Value val)
 {
-	if (vm->stack.count >= STACK_MAX) {
+	size_t stack_offset = vm->stack.stack_top - vm->stack.values;
+	if (stack_offset >= STACK_MAX) {
 		runtime_error(vm, "vm stack overflow.");
 		return false;
 	}
-	if (vm->stack.capacity < vm->stack.count + 1) {
+	if (vm->stack.capacity < stack_offset + 1) {
 		size_t slots_offset;
 		int old_capacity = vm->stack.capacity;
-		/* NULL - NULL = 0 (?)*/
-		size_t stack_offset = vm->stack.stack_top - vm->stack.values;
 		if (frame)
 			slots_offset = frame->slots - vm->stack.values;
 		vm->stack.capacity = GROW_CAPACITY(old_capacity);
@@ -76,7 +74,6 @@ static bool push(VM *vm, CallFrame *frame, Value val)
 			frame->slots = vm->stack.values + slots_offset;
 	}
 	*(vm->stack.stack_top) = val;
-	++vm->stack.count;
 	++vm->stack.stack_top;
 	return true;
 }

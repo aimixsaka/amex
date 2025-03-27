@@ -54,20 +54,26 @@ static void runtime_error(VM *vm, const char *format, ...)
 	reset_stack(vm);
 }
 
-static bool push(VM *vm, Value val)
+static bool push(VM *vm, CallFrame *frame, Value val)
 {
 	if (vm->stack.count >= STACK_MAX) {
 		runtime_error(vm, "vm stack overflow.");
 		return false;
 	}
 	if (vm->stack.capacity < vm->stack.count + 1) {
+		size_t slots_offset;
 		int old_capacity = vm->stack.capacity;
 		/* NULL - NULL = 0 (?)*/
-		size_t offset = vm->stack.stack_top - vm->stack.values;
+		size_t stack_offset = vm->stack.stack_top - vm->stack.values;
+		if (frame)
+			slots_offset = frame->slots - vm->stack.values;
 		vm->stack.capacity = GROW_CAPACITY(old_capacity);
 		vm->stack.values = GROW_ARRAY(Value, vm->stack.values,
 					     old_capacity, vm->stack.capacity);
-		vm->stack.stack_top = vm->stack.values + offset;
+		vm->stack.stack_top = vm->stack.values + stack_offset;
+		/* synchronize frame slots to new allocated vm stack */
+		if (frame)
+			frame->slots = vm->stack.values + slots_offset;
 	}
 	*(vm->stack.stack_top) = val;
 	++vm->stack.count;
@@ -194,10 +200,10 @@ static InterpretResult run(VM *vm)
 #define READ_CONSTANT()		\
 	(frame->closure->function->chunk.constants.values[READ_SHORT()])
 
-#define PUSH(v)			\
-do {				\
-	if (!push(vm, v))	\
-		return IERROR;	\
+#define PUSH(v)				\
+do {					\
+	if (!push(vm, frame, v))	\
+		return IERROR;		\
 } while (0)
 
 #define ARITH_OP(op, n, init_val)					\
@@ -505,7 +511,7 @@ do {									\
 InterpretResult interpret(VM *vm, Function *f)
 {
 	Closure *closure = new_closure(vm, f);
-	push(vm, CLOSURE_VAL(closure));
+	push(vm, NULL, CLOSURE_VAL(closure));
 	call(vm, closure, 0);
 
 	return run(vm);

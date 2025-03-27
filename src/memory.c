@@ -1,18 +1,6 @@
-#include <stdlib.h>
-
-#include "chunk.h"
-#include "value.h"
-#include "vm.h"
-#include "memory.h"
-#include "object.h"
-#include "str.h"
-#include "buffer.h"
-#include "array.h"
-#include "table.h"
-#include "compiler.h"
+#include "include/amex.h"
 
 #ifdef DEBUG_LOG_GC
-#include <stdio.h>
 #include "debug.h"
 #endif
 
@@ -86,11 +74,11 @@ static void free_object(GCObject *object)
 	}
 }
 
-void free_objects()
+void free_objects(VM *vm)
 {
 	GCObject *object, *next;
 
-	object = vm.objects;
+	object = vm->objects;
 	while (object != NULL) {
 		next = object->next;
 		free_object(object);

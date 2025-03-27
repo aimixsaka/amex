@@ -1,7 +1,4 @@
-#include "common.h"
-#include "chunk.h"
-#include "memory.h"
-#include "value.h"
+#include "include/amex.h"
 
 void init_chunk(Chunk *chunk)
 {

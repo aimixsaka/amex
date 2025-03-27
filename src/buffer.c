@@ -1,11 +1,8 @@
-#include "value.h"
-#include "str.h"
-#include "buffer.h"
-#include "memory.h"
+#include "include/amex.h"
 
-String *buf_to_str(Buffer *buf)
+String *buf_to_str(VM *vm, Buffer *buf)
 {
-	return copy_string(buf->data, buf->length);
+	return copy_string(vm, buf->data, buf->length);
 }
 
 void buf_push(Buffer *buf, const char c)

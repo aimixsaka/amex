@@ -1,10 +1,5 @@
-#include "common.h"
-#include "memory.h"
+#include "include/amex.h"
 #include "util.h"
-#include "str.h"
-#include "table.h"
-#include "include/amexconf.h"
-#include "value.h"
 
 /*
  * Used for internal only,

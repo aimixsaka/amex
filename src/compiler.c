@@ -1,15 +1,8 @@
 #include <setjmp.h>
-#include <stdint.h>
 
-#include "array.h"
-#include "chunk.h"
-#include "common.h"
-#include "compiler.h"
-#include "include/amexconf.h"
-#include "str.h"
-#include "strings.h"
-#include "value.h"
+#include "util.h"
 #include "debug.h"
+#include "include/amex.h"
 
 
 /*
@@ -87,21 +80,25 @@ static void emit_bytes(uint8_t byte1, uint8_t byte2)
 	write_chunk(current_chunk(), byte2);
 }
 
-static void init_compiler(Compiler *compiler, FunctionType type, String *fname)
+static void init_compiler(VM *vm, Compiler *compiler, FunctionType type, String *fname)
 {
 	/* store previous compiler */
+	compiler->vm = vm;
 	compiler->enclosing = current;
 	compiler->type = type;
+	compiler->constant_count = 0;
 	compiler->local_count = 0;
 	compiler->scope_depth = 0;
-	compiler->function = new_function();
-	current = compiler;
+	compiler->function = new_function(compiler->vm);
 	if (type != SCRIPT_TYPE && fname)
-		compiler->function->name = copy_string(fname->chars, fname->length);
+		compiler->function->name = copy_string(compiler->vm, fname->chars, fname->length);
 	Local *local = &compiler->locals[compiler->local_count++];
 	local->name = fname;
 	local->depth = 0;
 	local->is_captured = false;
+	local->index = 0;
+	++compiler->constant_count;
+	current = compiler;
 }
 
 static Function *end_compiler()
@@ -126,7 +123,7 @@ static int resolve_local(Compiler *c, String *name)
 			if (l->depth == -1) {
 				CERROR("can't read local variable in its own initializer.\n");
 			}
-			return i;
+			return l->index;
 		}
 	}
 
@@ -145,6 +142,7 @@ static void add_local(String *name)
 	l->name = name;
 	l->depth = -1;
 	l->is_captured = false;
+	l->index = current->constant_count;
 }
 
 static int add_upvalue(Compiler *c, uint8_t index,
@@ -189,7 +187,7 @@ static void begin_scope()
 	++current->scope_depth;
 }
 
-static void end_scope()
+static void end_scope(uint8_t n)
 {
 	--current->scope_depth;
 
@@ -204,11 +202,11 @@ static void end_scope()
 			 * that is captured and to be out of scope(out of stack).
 			 */
 			emit_byte(OP_CLOSE_UPVALUE);
-		} else {
-			emit_byte(OP_POP);
+			emit_short((uint16_t)(current->locals[current->local_count - 1].index));
 		}
 		--current->local_count;
 	}
+	emit_bytes(OP_POPN, (uint8_t)n);
 }
 
 /*
@@ -269,7 +267,9 @@ typedef struct {
 
 static void spe_quote(uint8_t argn, const Value *argv)
 {
-
+	if (argn != 1)
+		CERROR("quote need exactly 1 argument.");
+	emit_constant(argv[0]);
 }
 
 static void spe_quasiquote(uint8_t argn, const Value *argv)
@@ -304,7 +304,7 @@ static void spe_fn(uint8_t argn, const Value *argv)
 		case TYPE_SYMBOL:	
 			CERROR("expect function parameters.\n");
 		case TYPE_ARRAY:
-			init_compiler(&compiler, FUNCTION_TYPE, NULL);
+			init_compiler(current->vm, &compiler, FUNCTION_TYPE, NULL);
 			args = AS_ARRAY(head);
 			check_args(args);
 			compiler.function->arity = args->count;
@@ -320,7 +320,7 @@ static void spe_fn(uint8_t argn, const Value *argv)
 			if (!check_args(args)) {
 				CERROR("function parameter should be a symbol.\n");
 			}
-			init_compiler(&compiler, FUNCTION_TYPE, NULL);
+			init_compiler(current->vm, &compiler, FUNCTION_TYPE, NULL);
 			compile_args(args);
 			begin_scope();
 			compiler.function->arity = args->count;
@@ -335,7 +335,7 @@ static void spe_fn(uint8_t argn, const Value *argv)
 			if (!check_args(args)) {
 				CERROR("function parameter should be a symbol.\n");
 			}
-			init_compiler(&compiler, FUNCTION_TYPE, fname);
+			init_compiler(current->vm, &compiler, FUNCTION_TYPE, fname);
 			/* arguments and function name should be in scope 0 */
 			compile_args(args);
 			begin_scope();
@@ -406,7 +406,8 @@ static void spe_do(uint8_t argn, const Value *argv)
 	begin_scope();
 	compile_body(argn, argv);
 	emit_byte(OP_SAVE_TOP);
-	end_scope();
+	/* do evaluates to the last exp in body */
+	end_scope(argn - 1);
 	emit_byte(OP_RESTORE_TOP);
 }
 
@@ -448,13 +449,50 @@ static void emit_if(const Value *b, const Value *exp,
 
 static void spe_if(uint8_t argn, const Value *argv)
 {
-	if (argn == 2) {
+	if (argn == 2)
 		emit_if(&argv[0], &argv[1], false, NULL);
-	} else if (argn == 3) {
+	else if (argn == 3)
 		emit_if(&argv[0], &argv[1], true, &argv[2]);
-	} else {
+	else
 		CERROR("expect 2 or 3 arguments.");
-	}
+}
+
+static void emit_loop(int loop_start)
+{
+	emit_byte(OP_LOOP);
+
+	int offset = current_chunk()->count - loop_start + 2;
+	if (offset > UINT16_MAX)
+		CERROR("loop body too large.\n");
+
+	emit_byte((offset >> 8) & 0xff);
+	emit_byte(offset & 0xff);
+}
+
+static void spe_while(uint8_t argn, const Value *argv)
+{
+	if (argn < 1)
+		CERROR("while expect at least 1 argument.");
+
+	/*
+	 * interesting semantic choice, this way
+	 * condition of while belongs to while,
+	 * not upper scope of while.
+	 */
+	begin_scope();
+
+	int loop_start = current_chunk()->count;
+	compile_ast(&argv[0]);	
+
+	int exit_jump = emit_jump(OP_JUMP_IF_FALSE);
+
+	compile_body(argn - 1, argv + 1);
+	emit_loop(loop_start);
+
+	patch_jump(exit_jump);
+
+	end_scope(argn);
+	emit_byte(OP_NIL); /* while evaluates to nil */
 }
 
 
@@ -469,22 +507,16 @@ static const SpecialFn special_fns[] = {
 	{	"set",		spe_set		},
 	{	"splice",	spe_splice	},
 	{	"unquote",	spe_unquote	},
+	{	"while",	spe_while	}
 };
 
 static const SpecialFn *get_special_fn(const char *name)
 {
-	/* TOOD: binary search special function name */
-	if (memcmp(name, "fn", 2) == 0)
-		return &special_fns[2];
-	if (memcmp(name, "def", 3) == 0)
-		return &special_fns[0];
-	if (memcmp(name, "if", 2) == 0)
-		return &special_fns[3];
-	if (memcmp(name, "do", 2) == 0)
-		return &special_fns[1];
-	if (memcmp(name, "set", 3) == 0)
-		return &special_fns[6];
-	return NULL;
+	return tab_binary_search(
+			&special_fns,
+			sizeof(special_fns) / sizeof(SpecialFn),
+			sizeof(SpecialFn),
+			name);
 }
 /* Special Form End */
 
@@ -519,6 +551,7 @@ static void compile_args(const Array *arr)
 	for (int i = 0; i < arr->count; ++i) {
 		v = AS_STRING(arr->values[i]);
 		declare_arg(v);
+		++current->constant_count;
 	}
 }
 
@@ -526,10 +559,13 @@ static void compile_body(uint8_t elemn, const Value *elms)
 {
 	if (elemn == 0) {
 		emit_byte(OP_NIL);
+		++current->constant_count;
 		return;
 	}
-	for (int i = 0; i < elemn; ++i)
+	for (int i = 0; i < elemn; ++i) {
 		compile_ast(&elms[i]);
+		++current->constant_count;
+	}
 }
 
 static void compile_form(uint8_t elemn, const Value *elms)
@@ -611,7 +647,7 @@ static void compile_ast(const Value *ast)
 	}
 }
 
-Function *compile(Value ast)
+Function *compile(VM *vm, Value ast)
 {
 	/* TODO: free memory ? */
 	Compiler compiler;
@@ -619,7 +655,7 @@ Function *compile(Value ast)
 		current = NULL;
 		return NULL;
 	}
-	init_compiler(&compiler, SCRIPT_TYPE, NULL);
+	init_compiler(vm, &compiler, SCRIPT_TYPE, NULL);
 	compile_ast(&ast);
 	return end_compiler();
 }

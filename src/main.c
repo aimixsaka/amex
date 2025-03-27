@@ -1,13 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-
-#include "compiler.h"
-#include "corelib.h"
-#include "parser.h"
-#include "str.h"
-#include "value.h"
-#include "include/amexconf.h"
-#include "vm.h"
+#include "include/amex.h"
 #include "debug.h"
 
 
@@ -15,18 +6,19 @@ static void repl()
 {
 	Parser p;
 	Function *f;
+	VM vm;
 	char buffer[AMEX_REPL_LINE_MAX_LENGTH] = { 0 };
 	const char *reader;
 
 	puts("Amex " AMEX_LANG_VERSION_STRING);
 	puts("Press Ctrl+d to exit.");
-	init_vm();
-	set_vm_globals(core_env(NULL));
+	init_vm(&vm);
+	set_vm_globals(&vm, core_env(&vm, NULL));
 	for (;;) {
 		/* Flush the input buffer */
 		buffer[0] = '\0';
 		reader = buffer;
-		init_parser(&p);
+		init_parser(&vm, &p);
 		/*
 		 * Parse until we got a full form, 
 		 * which means we allow multi-line expression(typical lisp way).
@@ -57,18 +49,18 @@ static void repl()
 		}
 
 		/* Compile to Function(which contains bytecode) */
-		f = compile(p.value);
+		f = compile(&vm, p.value);
 		if (f == NULL)
 			continue;
 
 		/* Execute bytecode in VM */
-		InterpretResult res = interpret(f);
+		InterpretResult res = interpret(&vm, f);
 		if (res.status == INTERPRET_OK)
 			print_value(&res.ret, "\n");
 	}
 on_error:
 	free_parser(&p);
-	free_vm();
+	free_vm(&vm);
 }
 
 static char *read_file(const char *path)
@@ -107,13 +99,14 @@ static void run_file(const char *path)
 
 	Parser p;
 	Function *f;
+	VM vm;
 	const char *reader = source;
 
 
-	init_vm();
-	set_vm_globals(core_env(NULL));
+	init_vm(&vm);
+	set_vm_globals(&vm, core_env(&vm, NULL));
 	for (;;) {
-		init_parser(&p);
+		init_parser(&vm, &p);
 		/*
 		 * Parse until we got a full form, 
 		 * which means we allow multi-line expression(typical lisp way).
@@ -144,17 +137,17 @@ static void run_file(const char *path)
 		print_value(&p.value, "\n");
 		puts("**** dump ast end ****");
 #endif /* DEBUG_TRACE_EXECUTION */
-		f = compile(p.value);
+		f = compile(&vm, p.value);
 		if (f == NULL)
 			exit(66);
 
 		/* Execute bytecode in VM */
-		InterpretResult res = interpret(f);
+		InterpretResult res = interpret(&vm, f);
 		if (res.status == INTERPRET_RUNTIME_ERROR)
 			exit(67);
 	}
 	free(source);
-	free_vm();
+	free_vm(&vm);
 }
 
 int main(int argc, const char *argv[])

@@ -14,10 +14,12 @@ CFLAGS := -MMD -std=c99 -Wall
 
 ifdef DEBUG
 	CFLAGS += -g -O0 -DDEBUG
+	TARGET_EXEC = amex-debug
 else ifdef RELEASE
 	CFLAGS += -O2
 else
 	CFLAGS += -g -O0
+	TARGET_EXEC = amex-no-optimization
 endif
 
 $(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
@@ -29,7 +31,7 @@ $(BUILD_DIR)/%.c.o: %.c
 
 .PHONY: clean memcheck format
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR)/src
 
 memcheck: $(BUILD_DIR)/$(TARGET_EXEC)
 	valgrind --leak-check=yes $(BUILD_DIR)/$(TARGET_EXEC)

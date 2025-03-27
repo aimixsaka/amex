@@ -1,8 +1,4 @@
-#include <stdio.h>
-
-#include "value.h"
-#include "str.h"
-#include "compiler.h"
+#include "include/amex.h"
 
 static void print_function(Function *f, const char *sep)
 {

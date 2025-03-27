@@ -1,0 +1,7 @@
+(do
+    2
+    3
+    (def a 11)
+    (def b 22)
+    1
+    (print (+ a b)))

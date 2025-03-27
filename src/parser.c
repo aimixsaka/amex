@@ -1,10 +1,4 @@
-#include "array.h"
-#include "str.h"
-#include "table.h"
-#include "value.h"
-#include "memory.h"
-#include "buffer.h"
-#include "parser.h"
+#include "include/amex.h"
 
 static void dump_parse_state(ParseState *state)
 {
@@ -149,18 +143,18 @@ static void parser_push(Parser *p, ParserType type)
 	case PTYPE_ROOT:
 		break;
 	case PTYPE_STRING:
-		top->buf.string.buffer = new_buffer(10);
+		top->buf.string.buffer = new_buffer(p->vm, 10);
 		top->buf.string.state = STRING_STATE_BASE;
 		break;
 	case PTYPE_TOKEN:
-		top->buf.string.buffer = new_buffer(8);
+		top->buf.string.buffer = new_buffer(p->vm, 8);
 		break;
 	case PTYPE_ARRAY:
 	case PTYPE_TUPLE:
-		top->buf.array = new_array(8);
+		top->buf.array = new_array(p->vm, 8);
 		break;
 	case PTYPE_TABLE:
-		top->buf.table_state.table = new_table(8);
+		top->buf.table_state.table = new_table(p->vm, 8);
 		top->buf.table_state.key_found = false;
 		break;
 	case PTYPE_SPECIAL_FORM:
@@ -195,7 +189,7 @@ static void parser_top_append(Parser *p, Value x)
 		break;
 	case PTYPE_SPECIAL_FORM: {
 		Value pair, spe_form;
-		Array *arr2 = new_array(2);
+		Array *arr2 = new_array(p->vm, 2);
 		ParseState *top = parser_peek(p);
 		parser_pop(p);
 
@@ -262,10 +256,10 @@ static Value buf_build_token(Parser *p, Buffer *buf)
 			x.type = TYPE_NIL;
 		} else if (first_char == ':') {
 			x.type = TYPE_KEYWORD;
-			x.data.string = buf_to_str(buf);
+			x.data.string = buf_to_str(p->vm, buf);
 		} else {
 			x.type = TYPE_SYMBOL;
-			x.data.string = buf_to_str(buf);
+			x.data.string = buf_to_str(p->vm, buf);
 		}
 	}
 	return x;
@@ -378,7 +372,7 @@ static int string_state(Parser *p, const char c) {
 		} else if (c == '"') {
 			Value x;
 			x.type = TYPE_STRING;
-			x.data.string = buf_to_str(top->buf.string.buffer);
+			x.data.string = buf_to_str(p->vm, top->buf.string.buffer);
 			parser_pop(p);
 			parser_top_append(p, x);
 		} else {
@@ -460,16 +454,16 @@ static int special_char_state(Parser *p, const char c)
 	spe_form.type = TYPE_TUPLE;
 	switch (c) {
 	case '\'':	/* quote */
-		spe_form.data.string = copy_string("quote", 5);
+		spe_form.data.string = copy_string(p->vm, "quote", 5);
 		break;
 	case '~':	/* quasiquote */
-		spe_form.data.string = copy_string("quasiquote", 10);
+		spe_form.data.string = copy_string(p->vm, "quasiquote", 10);
 		break;
 	case ',':	/* unquote */
-		spe_form.data.string = copy_string("unquote", 7);
+		spe_form.data.string = copy_string(p->vm, "unquote", 7);
 		break;
 	case ';':	/* splice */
-		spe_form.data.string = copy_string("splice", 6);
+		spe_form.data.string = copy_string(p->vm, "splice", 6);
 		break;
 	}
 	top->buf.spe_form = spe_form;
@@ -552,9 +546,10 @@ void free_parser(Parser *p)
 	FREE_ARRAY(ParseState, p->stack, p->capacity);
 }
 
-void init_parser(Parser *p)
+void init_parser(VM *vm, Parser *p)
 {
 	ParseState *data = NULL;
+	p->vm = vm;
 	p->stack = data;
 	p->count = 0;
 	p->capacity = 0;

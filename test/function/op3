@@ -1,0 +1,12 @@
+(def op3 (fn [op]
+            (op 3)))
+
+
+(print "op3 + :")
+(print (op3 +))
+
+(print "op3 - :")
+(print (op3 -))
+
+(print "op3 * :")
+(print (op3 *))

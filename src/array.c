@@ -1,7 +1,4 @@
-#include "common.h"
-#include "value.h"
-#include "memory.h"
-#include "array.h"
+#include "include/amex.h"
 
 void init_array(Array *array)
 {

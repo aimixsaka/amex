@@ -1,0 +1,10 @@
+(do
+      11
+      22)
+(do
+      8
+      (print 9))
+(do
+    (def a 2)
+    (set a 3)
+    (print a))

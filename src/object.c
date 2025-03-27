@@ -1,26 +1,17 @@
-#include "chunk.h"
-#include "common.h"
-#include "memory.h"
-#include "object.h"
-#include "value.h"
-#include "str.h"
-#include "buffer.h"
-#include "array.h"
-#include "compiler.h"
-#include "vm.h"
+#include "include/amex.h"
 #include "util.h"
 
-#define ALLOCATE_OBJ(type, obj_type)				\
-	(type*)allocate_object(sizeof(type), obj_type)
+#define ALLOCATE_OBJ(vm, type, obj_type)				\
+	(type*)allocate_object(vm, sizeof(type), obj_type)
 
-static GCObject *allocate_object(size_t size, ObjType type)
+static GCObject *allocate_object(VM *vm, size_t size, ObjType type)
 {
 	GCObject *object = (struct GCObject *)reallocate(NULL, 0, size);
 
-	object->next = vm.objects;
+	object->next = vm->objects;
 	object->type = type;
 	object->is_marked = false;
-	vm.objects = object;
+	vm->objects = object;
 
 #ifdef DEBUG_LOG_GC
 	printf("%p allocate %zu for %d\n", (void *)object, size, type);
@@ -29,25 +20,25 @@ static GCObject *allocate_object(size_t size, ObjType type)
 	return object;
 }
 
-static String *allocate_string(char *chars, uint32_t length,
-			       uint32_t hash)
+static String *allocate_string(VM *vm, char *chars,
+			       uint32_t length, uint32_t hash)
 {
-	String *s = ALLOCATE_OBJ(String, OBJ_STRING);
+	String *s = ALLOCATE_OBJ(vm, String, OBJ_STRING);
 	s->length = length;
 	s->chars = chars;
 	s->hash = hash;
 	/* intern string if not in table */
-	table_set(&vm.strings, STRING_VAL(s), NIL_VAL);
+	table_set(&vm->strings, STRING_VAL(s), NIL_VAL);
 	return s;
 }
 
-String *copy_string(const char *chars, uint32_t length)
+String *copy_string(VM *vm, const char *chars, uint32_t length)
 {
 	uint32_t hash;
 	String *interned;
 
 	hash = hash_cstring(chars, length);
-	interned = table_find_string(&vm.strings, chars, length, hash);
+	interned = table_find_string(&vm->strings, chars, length, hash);
 
 	if (interned != NULL) {
 		return interned;
@@ -57,30 +48,30 @@ String *copy_string(const char *chars, uint32_t length)
 	memcpy(heap_chars, chars, length);
 	heap_chars[length] = '\0';
 
-	return allocate_string(heap_chars, length, hash);
+	return allocate_string(vm, heap_chars, length, hash);
 }
 
-Buffer *new_buffer(uint32_t capacity)
+Buffer *new_buffer(VM *vm, uint32_t capacity)
 {
-	Buffer *buf = ALLOCATE_OBJ(Buffer, OBJ_BUFFER);
+	Buffer *buf = ALLOCATE_OBJ(vm, Buffer, OBJ_BUFFER);
 	buf->length = 0;
 	buf->capacity = capacity;
 	buf->data = ALLOCATE(char, capacity);
 	return buf;
 }
 
-Array *new_array(uint32_t capacity)
+Array *new_array(VM *vm, uint32_t capacity)
 {
-	Array *array = ALLOCATE_OBJ(Array, OBJ_ARRAY);
+	Array *array = ALLOCATE_OBJ(vm, Array, OBJ_ARRAY);
 	array->count = 0;
 	array->capacity = capacity;
 	array->values = ALLOCATE(Value, capacity);
 	return array;
 }
 
-Table *new_table(uint32_t capacity)
+Table *new_table(VM *vm,uint32_t capacity)
 {
-	Table *table = ALLOCATE_OBJ(Table, OBJ_TABLE);
+	Table *table = ALLOCATE_OBJ(vm, Table, OBJ_TABLE);
 	table->count = 0;
 	table->capacity = capacity;
 	table->entries = ALLOCATE(Entry, capacity);
@@ -91,9 +82,9 @@ Table *new_table(uint32_t capacity)
 	return table;
 }
 
-Function *new_function()
+Function *new_function(VM *vm)
 {
-	Function *f = ALLOCATE_OBJ(Function, OBJ_FUNCTION);
+	Function *f = ALLOCATE_OBJ(vm, Function, OBJ_FUNCTION);
 	f->name = NULL;
 	f->arity = 0;
 	f->upval_count = 0;
@@ -101,22 +92,22 @@ Function *new_function()
 	return f;
 }
 
-Upvalue *new_upvalue(Value *slot)
+Upvalue *new_upvalue(VM *vm, Value *slot)
 {
-	Upvalue *upvalue = ALLOCATE_OBJ(Upvalue, OBJ_UPVALUE);
+	Upvalue *upvalue = ALLOCATE_OBJ(vm, Upvalue, OBJ_UPVALUE);
 	upvalue->location = slot;
 	upvalue->closed = NIL_VAL;
 	upvalue->next = NULL;
 	return upvalue;
 }
 
-Closure *new_closure(Function *function)
+Closure *new_closure(VM *vm, Function *function)
 {
 	Upvalue **upvalues = ALLOCATE(Upvalue*,
 				      function->upval_count);
 	for (int i = 0; i < function->upval_count; ++i)
 		upvalues[i] = NULL;
-	Closure *closure = ALLOCATE_OBJ(Closure, OBJ_CLOSURE);
+	Closure *closure = ALLOCATE_OBJ(vm, Closure, OBJ_CLOSURE);
 	closure->function = function;
 	closure->upvalues = upvalues;
 	closure->upvalue_count = function->upval_count;

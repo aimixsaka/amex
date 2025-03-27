@@ -1,8 +1,7 @@
 #ifndef AMEX_DEBUG_H
 #define AMEX_DEBUG_H
 
-
-#include "chunk.h"
+#include "include/amex.h"
 
 #ifdef DEBUG
 #define	DEBUG_TRACE_EXECUTION

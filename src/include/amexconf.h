@@ -1,5 +1,5 @@
-#ifndef AMEX_H_defined
-#define AMEX_H_defined
+#ifndef AMEXCONF_H_defined
+#define AMEXCONF_H_defined
 
 #define AMEX_LANG_MAJOR_VERSION		0
 #define AMEX_LANG_MINOR_VERSION		1
@@ -22,5 +22,6 @@
 /* ---------- VM related --------- */
 /* max call depth */
 #define FRAMES_MAX			1024
+#define STACK_MAX			4096
 
-#endif /* AMEX_H_defined */
+#endif /* #define AMEXCONF_H_defined */

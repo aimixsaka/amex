@@ -184,7 +184,7 @@ static InterpretResult run(VM *vm)
 	 * HACK: use these temp values for
 	 * spe_do and corelib functions.
 	 */
-	Value op_temp;
+	uint8_t op_temp;
 	Value do_temp;
 	CallFrame *frame = &vm->frames[vm->frame_count - 1];
 #define READ_BYTE() (*frame->ip++)
@@ -396,53 +396,43 @@ do {									\
 		}
 		/* TODO OP_SUM0 ...*/
 		case OP_SUMN: {
-			uint8_t n = AS_NUMBER(op_temp);
-			ARITH_OP(+, n, 0);
+			ARITH_OP(+, op_temp, 0);
 			break;
 		}
 		case OP_SUBTRACTN: {
-			uint8_t n = AS_NUMBER(op_temp);
-			ARITH_OP(-, n, 0);
+			ARITH_OP(-, op_temp, 0);
 			break;
 		}
 		case OP_MULTIPLYN: {
-			uint8_t n = AS_NUMBER(op_temp);
-			ARITH_OP(*, n, 1);
+			ARITH_OP(*, op_temp, 1);
 			break;
 		}
 		case OP_DIVIDEN: {
-			uint8_t n = AS_NUMBER(op_temp);
-			ARITH_OP(/, n, 1);
+			ARITH_OP(/, op_temp, 1);
 			break;
 		}
 		case OP_GREATER: {
-			uint8_t n = AS_NUMBER(op_temp);
-			COMPARE_OP(>, n, false);
+			COMPARE_OP(>, op_temp, false);
 			break;
 		}
 		case OP_LESS: {
-			uint8_t n = AS_NUMBER(op_temp);
-			COMPARE_OP(<, n, false);
+			COMPARE_OP(<, op_temp, false);
 			break;
 		}
 		case OP_GREATER_EQUAL: {
-			uint8_t n = AS_NUMBER(op_temp);
-			COMPARE_OP(>=, n, true);
+			COMPARE_OP(>=, op_temp, true);
 			break;
 		}
 		case OP_LESS_EQUAL: {
-			uint8_t n = AS_NUMBER(op_temp);
-			COMPARE_OP(<=, n, true);
+			COMPARE_OP(<=, op_temp, true);
 			break;
 		}
 		case OP_EQUAL: {
-			uint8_t n = AS_NUMBER(op_temp);
-			EQ_OP(n, true);
+			EQ_OP(op_temp, true);
 			break;
 		}
 		case OP_NOT_EQUAL: {
-			uint8_t n = AS_NUMBER(op_temp);
-			EQ_OP(n, false);
+			EQ_OP(op_temp, false);
 			break;
 		}
 		case OP_PRINT: {
@@ -478,7 +468,7 @@ do {									\
 		}
 		case OP_CALL: {
 			uint8_t argn = READ_BYTE();
-			op_temp = NUMBER_VAL(argn);
+			op_temp = argn;
 			if (!call_value(vm, peek(vm, argn), argn)) {
 				return IERROR;
 			}

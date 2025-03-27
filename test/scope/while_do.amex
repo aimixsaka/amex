@@ -1,0 +1,8 @@
+(def i 9)
+
+(while (> i 0)
+  (do
+      (def a 3)
+      (def b 4)
+      (print (+ a b)))
+  (set i 0))

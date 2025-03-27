@@ -17,6 +17,7 @@
 
 /* ---------- Compiler related ----- */
 #define UINT8_COUNT			UINT8_MAX + 1
+#define MAX_QUOTE_LEVEL			10
 
 
 /* ---------- VM related --------- */

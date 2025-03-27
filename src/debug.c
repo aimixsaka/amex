@@ -56,8 +56,6 @@ int disassemble_instruction(Chunk *chunk, int offset)
 		return simple_instruction("OP_TRUE", offset);
 	case OP_FALSE:
 		return simple_instruction("OP_FALSE", offset);
-	case OP_EMPTY_TUPLE:
-		return simple_instruction("OP_EMPTY_TUPLE", offset);
 	case OP_PRINT:
 		return simple_instruction("OP_PRINT", offset);
 	case OP_RETURN:
@@ -82,6 +80,10 @@ int disassemble_instruction(Chunk *chunk, int offset)
 		return simple_instruction("OP_MULTIPLYN", offset);
 	case OP_DIVIDEN:
 		return simple_instruction("OP_DIVIDEN", offset);
+	case OP_TUPLE:
+		return one_byte_instruction("OP_TUPLE", chunk, offset);
+	case OP_ARRAY:
+		return one_byte_instruction("OP_ARRAY", chunk, offset);
 	case OP_POPN:
 		return one_byte_instruction("OP_POPN", chunk, offset);
 	case OP_GET_LOCAL:

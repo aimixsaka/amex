@@ -278,7 +278,28 @@ static int main_state(Parser *p, char c)
 		return 1;
 	if (is_special_char(c)) {
 		parser_push(p, PTYPE_SPECIAL_FORM);
-		return 0;
+		String *qs;
+		Value v;
+		v.type = TYPE_SYMBOL;
+		ParseState *top = parser_peek(p);
+		Array *quote_pair = top->buf.array;
+		switch (c) {
+		case '\'':	/* quote */
+			qs = copy_string(p->vm, "quote", 5);
+			break;
+		case '~':	/* quasiquote */
+			qs = copy_string(p->vm, "quasiquote", 10);
+			break;
+		case ',':	/* unquote */
+			qs = copy_string(p->vm, "unquote", 7);
+			break;
+		case ';':	/* splice */
+			qs = copy_string(p->vm, "splice", 6);
+			break;
+		}
+		v.data.string = qs;
+		write_array(quote_pair, v);
+		return 1;
 	}
 	if (is_symbol_char(c)) {
 		parser_push(p, PTYPE_TOKEN);
@@ -434,38 +455,11 @@ static int table_state(Parser *p, const char c) {
 	}
 }
 
-/*
- * Handle a special char, transform it to symbol,
- * we will handle that in compiler as a special form.
- */
+
+/* we allow multi level quote */
 static int special_char_state(Parser *p, const char c)
 {
-	if (is_special_char(c)) {
-		String *qs;
-		Value v;
-		v.type = TYPE_SYMBOL;
-		ParseState *top = parser_peek(p);
-		Array *quote_pair = top->buf.array;
-		switch (c) {
-		case '\'':	/* quote */
-			qs = copy_string(p->vm, "quote", 5);
-			break;
-		case '~':	/* quasiquote */
-			qs = copy_string(p->vm, "quasiquote", 10);
-			break;
-		case ',':	/* unquote */
-			qs = copy_string(p->vm, "unquote", 7);
-			break;
-		case ';':	/* splice */
-			qs = copy_string(p->vm, "splice", 6);
-			break;
-		}
-		v.data.string = qs;
-		write_array(quote_pair, v);
-		return 1;
-	} else {
-		return main_state(p, c);
-	}
+	return main_state(p, c);
 }
 
 static bool check_eof(Parser *p, ParseState *state, const char c)

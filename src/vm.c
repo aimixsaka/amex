@@ -312,6 +312,28 @@ do {									\
 		case OP_FALSE:
 			PUSH(BOOL_VAL(false));
 			break;
+		case OP_TUPLE: {
+			Value x;
+			x.type = TYPE_TUPLE;
+			uint8_t n = READ_BYTE();
+			x.data.array = new_array(vm, n + 1);
+			for (int i = n - 1; i >= 0; --i)
+				write_array(x.data.array, peek(vm, i));
+			popn(vm, n);
+			PUSH(x);
+			break;
+		}
+		case OP_ARRAY: {
+			Value x;
+			x.type = TYPE_ARRAY;
+			uint8_t n = READ_BYTE();
+			x.data.array = new_array(vm, n + 1);
+			for (int i = n - 1; i >= 0; --i)
+				write_array(x.data.array, peek(vm, i));
+			popn(vm, n);
+			PUSH(x);
+			break;
+		}
 		case OP_POP:
 			pop(vm);
 			break;

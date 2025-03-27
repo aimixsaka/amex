@@ -3,6 +3,7 @@
 #include "util.h"
 #include "debug.h"
 #include "include/amex.h"
+#include "include/amexconf.h"
 
 
 /*
@@ -269,18 +270,72 @@ typedef struct {
 static void spe_quote(uint8_t argn, const Value *argv)
 {
 	if (argn != 1)
-		CERROR("quote need exactly 1 argument.");
+		CERROR("quote need exactly 1 argument.\n");
 	emit_constant(argv[0]);
+}
+
+static int quasiquote(Value x, int depth, int level)
+{
+	if (depth == 0)
+		CERROR("quasiquote nested too deep.\n");
+
+	switch (x.type) {
+	case TYPE_TUPLE: {
+		uint8_t len, i;
+		Array *tup = x.data.array;
+		Value *elms = tup->values;
+		len = tup->count;
+		if (len > 1 && IS_SYMBOL(elms[0])) {
+			const char *sym = AS_CSTRING(elms[0]);
+			if (strcmp(sym, "unquote") == 0) {
+				if (level == 0) {
+					compile_ast(&elms[1]);
+					return 1;
+				} else {
+					--level;
+				}
+			} else if (strcmp(sym, "quasiquote")) {
+				++level;
+			}
+		}
+		for (i = 0; i < len; ++i)
+			quasiquote(elms[i], depth - 1, level);
+		return len;
+	}
+	case TYPE_ARRAY: {
+		uint8_t len, i;
+		Array *arr = x.data.array;
+		len = arr->count;
+		for (i = 0; i < len; ++i)
+			quasiquote(arr->values[i], depth - 1, level);
+		return len;
+	}
+	case TYPE_TABLE:
+		CERROR("quasiquote for type %d unimplemented.\n", x.type);
+	/* non-container type, behave same with quote */
+	default:
+		emit_constant(x);
+		return -1;
+	}
 }
 
 static void spe_quasiquote(uint8_t argn, const Value *argv)
 {
+	if (argn != 1)
+		CERROR("quote need exactly 1 argument.\n");
 
+	int qn = quasiquote(argv[0], MAX_QUOTE_LEVEL, 0);
+	if (qn != -1) {
+		if (IS_TUPLE(argv[0]))
+			emit_bytes(OP_TUPLE, (uint8_t)qn);
+		else if (IS_ARRAY(argv[0]))
+			emit_bytes(OP_ARRAY, (uint8_t)qn);
+	}
 }
 
 static void spe_unquote(uint8_t argn, const Value *argv)
 {
-
+	CERROR("cannot use unquote here, use it quasiquote instead.\n");
 }
 
 static void spe_splice(uint8_t argn, const Value *argv)

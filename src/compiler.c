@@ -576,7 +576,10 @@ static void compile_form(uint8_t elemn, const Value *elms)
 	}
 	if (elemn == 0) {
 		/* TODO: emit empty tuple constant */
-		emit_byte(OP_EMPTY_TUPLE);
+		Value x;
+		x.type = TYPE_TUPLE;
+		x.data.array = new_array(current->vm, 0);
+		emit_constant(x);
 		return;
 	}
 

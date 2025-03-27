@@ -34,6 +34,10 @@ void print_value(Value *v, const char *sep)
 	case TYPE_ARRAY: {
 		Array *form = AS_ARRAY(*v);
 		int len = form->count;
+		if (len == 0) {
+			printf("()%s", sep);
+			break;
+		}
 		printf("%s", (v->type == TYPE_TUPLE) ? "(" : "[");
 		for (int i = 0; i < len - 1; ++i) {
 			print_value(&form->values[i], " ");

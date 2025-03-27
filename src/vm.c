@@ -303,10 +303,6 @@ do {									\
 			PUSH(constant);
 			break;
 		}
-		/* TODO */
-		case OP_EMPTY_TUPLE:
-			PUSH(NIL_VAL);
-			break;
 		case OP_NIL:
 			PUSH(NIL_VAL);
 			break;

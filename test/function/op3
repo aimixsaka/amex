@@ -1,12 +1,12 @@
-(def op3 (fn [op]
-            (op 3)))
+(def op3 (fn [op n]
+            (op 3 n)))
 
 
 (print "op3 + :")
-(print (op3 +))
+(print (op3 + 2))
 
 (print "op3 - :")
-(print (op3 -))
+(print (op3 - 1))
 
 (print "op3 * :")
-(print (op3 *))
+(print (op3 * 8))

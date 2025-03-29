@@ -1,4 +1,5 @@
 #include <setjmp.h>
+#include <stdint.h>
 
 #include "util.h"
 #include "debug.h"
@@ -17,10 +18,11 @@ static jmp_buf	on_error;
  * If there is an error during compilation,
  * longjump back to start
  */
-#define CERROR(...)			\
-do {					\
-	fprintf(stderr, __VA_ARGS__);	\
-	longjmp(on_error, 1);		\
+#define CERROR(...)				\
+do {						\
+	fputs("compile error: ", stderr);	\
+	fprintf(stderr, __VA_ARGS__);		\
+	longjmp(on_error, 1);			\
 } while (0)
 
 static inline Chunk *current_chunk()
@@ -254,26 +256,26 @@ static void declare_arg(String *name)
 
 /* forward delcaration */
 static bool check_args(const Array *arr);
-static void compile_ast(const Value *ast);
+static void compile_ast(const Value *ast, uint8_t flags);
 static void compile_symbol(String *name, bool get_op);
 static void compile_args(const Array *arr);
-static void compile_body(uint8_t elmn, const Value *elms);
-static void compile_form(uint8_t elemn, const Value *elms);
+static void compile_body(uint8_t elmn, const Value *elms, uint8_t flags);
+static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags);
 
 /* Special Form Start */
 typedef struct {
 	const char	*name;
-	void (*fn)(uint8_t argn, const Value *argv);
+	void (*fn)(uint8_t argn, const Value *argv, uint8_t flags);
 } SpecialFn;
 
-static void spe_quote(uint8_t argn, const Value *argv)
+static void spe_quote(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn != 1)
 		CERROR("quote need exactly 1 argument.\n");
 	emit_constant(argv[0]);
 }
 
-static int quasiquote(Value x, int depth, int level)
+static void quasiquote(Value x, int depth, int level, uint8_t flags)
 {
 	if (depth == 0)
 		CERROR("quasiquote nested too deep.\n");
@@ -288,61 +290,75 @@ static int quasiquote(Value x, int depth, int level)
 			const char *sym = AS_CSTRING(elms[0]);
 			if (strcmp(sym, "unquote") == 0) {
 				if (level == 0) {
-					compile_ast(&elms[1]);
-					return 1;
+					flags |= OPT_ACCEPT_SPLICE;
+					compile_ast(&elms[1], flags);
+					return;
 				} else {
 					--level;
 				}
-			} else if (strcmp(sym, "quasiquote")) {
+			} else if (strcmp(sym, "quasiquote") == 0) {
 				++level;
 			}
 		}
 		for (i = 0; i < len; ++i)
-			quasiquote(elms[i], depth - 1, level);
-		return len;
+			quasiquote(elms[i], depth - 1, level, flags);
+		emit_bytes(OP_TUPLE, len);
+		break;
 	}
 	case TYPE_ARRAY: {
 		uint8_t len, i;
 		Array *arr = x.data.array;
 		len = arr->count;
 		for (i = 0; i < len; ++i)
-			quasiquote(arr->values[i], depth - 1, level);
-		return len;
+			quasiquote(arr->values[i], depth - 1, level, flags);
+		emit_bytes(OP_ARRAY, len);
+		break;
 	}
 	case TYPE_TABLE:
 		CERROR("quasiquote for type %d unimplemented.\n", x.type);
 	/* non-container type, behave same with quote */
 	default:
 		emit_constant(x);
-		return -1;
+		break;
 	}
 }
 
-static void spe_quasiquote(uint8_t argn, const Value *argv)
+static void spe_quasiquote(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn != 1)
 		CERROR("quote need exactly 1 argument.\n");
 
-	int qn = quasiquote(argv[0], MAX_QUOTE_LEVEL, 0);
-	if (qn != -1) {
-		if (IS_TUPLE(argv[0]))
-			emit_bytes(OP_TUPLE, (uint8_t)qn);
-		else if (IS_ARRAY(argv[0]))
-			emit_bytes(OP_ARRAY, (uint8_t)qn);
+	quasiquote(argv[0], MAX_QUOTE_LEVEL, 0, flags);
+}
+
+static void spe_unquote(uint8_t argn, const Value *argv, uint8_t flags)
+{
+	CERROR("cannot use unquote here, use it in quasiquote instead.\n");
+}
+
+static void spe_splice(uint8_t argn, const Value *argv, uint8_t flags)
+{
+	if (!(flags | OPT_ACCEPT_SPLICE))
+		CERROR(
+			"splice can only be used in function parameters and data constructors,"
+			"it has no effect here.\n"
+		);
+	if (argn != 1)
+		CERROR("splice need exactly 1 argument.\n");
+
+	Value head = argv[0];
+	if (IS_TUPLE(head)) {
+		Array *tup = AS_ARRAY(head);
+		if (tup->count >= 1 &&
+		    IS_SYMBOL(tup->values[0]) &&
+		    (strcmp(AS_CSTRING(tup->values[0]), "splice") == 0))
+			CERROR("multi level splice is unsupported.\n");
 	}
+	compile_ast(&head, flags);
+	emit_byte(OP_SPLICE);
 }
 
-static void spe_unquote(uint8_t argn, const Value *argv)
-{
-	CERROR("cannot use unquote here, use it quasiquote instead.\n");
-}
-
-static void spe_splice(uint8_t argn, const Value *argv)
-{
-
-}
-
-static void spe_fn(uint8_t argn, const Value *argv)
+static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn == 0) {
 		CERROR("fn need at least one argument.\n");
@@ -379,7 +395,7 @@ static void spe_fn(uint8_t argn, const Value *argv)
 			compile_args(args);
 			begin_scope();
 			compiler.function->arity = args->count;
-			compile_body(argn - 1, argv + 1);
+			compile_body(argn - 1, argv + 1, flags);
 			break;
 		case TYPE_SYMBOL:	/* (fn fname [a b] (+ a b) ...) */
 			if (argv[1].type != TYPE_ARRAY) {
@@ -395,7 +411,7 @@ static void spe_fn(uint8_t argn, const Value *argv)
 			compile_args(args);
 			begin_scope();
 			compiler.function->arity = args->count;
-			compile_body(argn - 2, argv + 2);
+			compile_body(argn - 2, argv + 2, flags);
 			break;
 		default:
 			CERROR("epxect function name or function parameters.\n");
@@ -413,7 +429,7 @@ static void spe_fn(uint8_t argn, const Value *argv)
 	}
 }
 
-static void spe_def(uint8_t argn, const Value *argv)
+static void spe_def(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn != 2) {
 		CERROR("def need exactly 2 arguments.\n");
@@ -428,16 +444,16 @@ static void spe_def(uint8_t argn, const Value *argv)
 	/* define local variable */
 	if (current->scope_depth > 0) {
 		declare_variable(var);
-		compile_ast(&v);
+		compile_ast(&v, flags);
 		mark_initialized();
 	} else {
 	/* define global variable */
-		compile_ast(&v);
+		compile_ast(&v, flags);
 		define_global(var);
 	}
 }
 
-static void spe_set(uint8_t argn, const Value *argv)
+static void spe_set(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn != 2) {
 		CERROR("def need exactly 2 arguments.\n");
@@ -447,19 +463,19 @@ static void spe_set(uint8_t argn, const Value *argv)
 	if (!IS_SYMBOL(k)) {
 		CERROR("variable name should be a symbol.\n");
 	}
-	compile_ast(&v);
+	compile_ast(&v, flags);
 	String *var = AS_STRING(k);
 	compile_symbol(var, false);
 }
 
-static void spe_do(uint8_t argn, const Value *argv)
+static void spe_do(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn == 0) {
 		emit_byte(OP_NIL);
 		return;
 	}
 	begin_scope();
-	compile_body(argn, argv);
+	compile_body(argn, argv, flags);
 	emit_byte(OP_SAVE_TOP);
 	/* do evaluates to the last exp in body */
 	end_scope(argn - 1);
@@ -485,29 +501,29 @@ static void patch_jump(int index)
 }
 
 static void emit_if(const Value *b, const Value *exp,
-		    bool has_else, const Value *e2)
+		    bool has_else, const Value *e2, uint8_t flags)
 {
 	int index1, index2;
-	compile_ast(b);
+	compile_ast(b, flags);
 	index1 = emit_jump(OP_JUMP_IF_FALSE);
-	compile_ast(exp);
+	compile_ast(exp, flags);
 	if (has_else) {
 		index2 = emit_jump(OP_JUMP);
 	}
 	patch_jump(index1);
 	if (has_else) {
-		compile_ast(e2);
+		compile_ast(e2, flags);
 		patch_jump(index2);
 	}
 }
 
 
-static void spe_if(uint8_t argn, const Value *argv)
+static void spe_if(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn == 2)
-		emit_if(&argv[0], &argv[1], false, NULL);
+		emit_if(&argv[0], &argv[1], false, NULL, flags);
 	else if (argn == 3)
-		emit_if(&argv[0], &argv[1], true, &argv[2]);
+		emit_if(&argv[0], &argv[1], true, &argv[2], flags);
 	else
 		CERROR("expect 2 or 3 arguments.");
 }
@@ -524,7 +540,7 @@ static void emit_loop(int loop_start)
 	emit_byte(offset & 0xff);
 }
 
-static void spe_while(uint8_t argn, const Value *argv)
+static void spe_while(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn < 1)
 		CERROR("while expect at least 1 argument.");
@@ -537,11 +553,11 @@ static void spe_while(uint8_t argn, const Value *argv)
 	begin_scope();
 
 	int loop_start = current_chunk()->count;
-	compile_ast(&argv[0]);	
+	compile_ast(&argv[0], flags);
 
 	int exit_jump = emit_jump(OP_JUMP_IF_FALSE);
 
-	compile_body(argn - 1, argv + 1);
+	compile_body(argn - 1, argv + 1, flags);
 	emit_loop(loop_start);
 
 	patch_jump(exit_jump);
@@ -610,7 +626,7 @@ static void compile_args(const Array *arr)
 	}
 }
 
-static void compile_body(uint8_t elemn, const Value *elms)
+static void compile_body(uint8_t elemn, const Value *elms, uint8_t flags)
 {
 	if (elemn == 0) {
 		emit_byte(OP_NIL);
@@ -618,12 +634,12 @@ static void compile_body(uint8_t elemn, const Value *elms)
 		return;
 	}
 	for (int i = 0; i < elemn; ++i) {
-		compile_ast(&elms[i]);
+		compile_ast(&elms[i], flags);
 		++current->constant_count;
 	}
 }
 
-static void compile_form(uint8_t elemn, const Value *elms)
+static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 {
 	if (elemn >= 255) {
 		CERROR("can't have more than 254 arguments.\n");
@@ -656,19 +672,19 @@ static void compile_form(uint8_t elemn, const Value *elms)
 		 */
 		const SpecialFn *sp_fn = get_special_fn(s->chars);
 		if (sp_fn) {
-			sp_fn->fn(argn, argv);
+			sp_fn->fn(argn, argv, flags);
 			return;
 		}
 		compile_symbol(s, true);
 		for (int i = 0; i < argn; ++i)
-			compile_ast(&argv[i]);
+			compile_ast(&argv[i], flags);
 		emit_bytes(OP_CALL, argn);
 		break;
 	}
 	case TYPE_TUPLE:
-		compile_form(head.data.array->count, head.data.array->values);
+		compile_form(head.data.array->count, head.data.array->values, flags);
 		for (int i = 1; i < elemn; ++i) {
-			compile_ast(&elms[i]);
+			compile_ast(&elms[i], flags);
 		}
 		emit_bytes(OP_CALL, elemn - 1);
 		break;
@@ -677,7 +693,7 @@ static void compile_form(uint8_t elemn, const Value *elms)
 	}
 }
 
-static void compile_ast(const Value *ast)
+static void compile_ast(const Value *ast, uint8_t flags)
 {
 	switch (ast->type) {
 	case TYPE_NIL:
@@ -696,7 +712,7 @@ static void compile_ast(const Value *ast)
 		compile_symbol(AS_STRING(*ast), true);
 		break;
 	case TYPE_TUPLE: {
-		compile_form(ast->data.array->count, ast->data.array->values);
+		compile_form(ast->data.array->count, ast->data.array->values, flags);
 		break;
 	}
 	default:
@@ -714,6 +730,6 @@ Function *compile(VM *vm, Value ast)
 		return NULL;
 	}
 	init_compiler(vm, &compiler, SCRIPT_TYPE, NULL);
-	compile_ast(&ast);
+	compile_ast(&ast, 0);
 	return end_compiler();
 }

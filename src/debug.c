@@ -80,6 +80,8 @@ int disassemble_instruction(Chunk *chunk, int offset)
 		return simple_instruction("OP_MULTIPLYN", offset);
 	case OP_DIVIDEN:
 		return simple_instruction("OP_DIVIDEN", offset);
+	case OP_SPLICE:
+		return simple_instruction("OP_SPLICE", offset);
 	case OP_TUPLE:
 		return one_byte_instruction("OP_TUPLE", chunk, offset);
 	case OP_ARRAY:

@@ -275,6 +275,7 @@ typedef enum {
 	OP_CALL,		/* 47 */
 	OP_PRINT,		/* 48 */
 	OP_RETURN,		/* 49 */
+	OP_SPLICE,		/* 50 */
 } OpCode;
 
 typedef struct {
@@ -293,6 +294,10 @@ void write_short(Chunk *chunk, uint16_t num);
 
 
 /* ==== Compiler Related Start ==== */
+
+/* compile flags */
+#define OPT_ACCEPT_SPLICE	1
+
 typedef enum {
 	FUNCTION_TYPE,	/* real function */
 	SCRIPT_TYPE,	/* top level code */
@@ -302,6 +307,7 @@ typedef enum {
  * We use a simple yet cleaner model that
  * every function has it's own chunk(bytecode area).
  */
+/* TODO: variable length parameters */
 struct Function {
 	GCObject		gc;
 	int			arity;

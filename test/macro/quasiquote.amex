@@ -1,0 +1,5 @@
+(def name 'sum)
+(def args '[x y])
+(def body '(+ x y))
+
+(print ~(def ,name (fn ,name ,args ,body)))

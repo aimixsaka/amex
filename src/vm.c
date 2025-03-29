@@ -48,7 +48,6 @@ static void runtime_error(VM *vm, const char *format, ...)
 	va_start(args, format);
 	vfprintf(stderr, format, args);
 	va_end(args);
-	fputs("\n", stderr);
 
 	reset_stack(vm);
 }
@@ -57,7 +56,7 @@ static bool push(VM *vm, CallFrame *frame, Value val)
 {
 	size_t stack_offset = vm->stack.stack_top - vm->stack.values;
 	if (stack_offset >= STACK_MAX) {
-		runtime_error(vm, "vm stack overflow.");
+		runtime_error(vm, "vm stack overflow\n");
 		return false;
 	}
 	if (vm->stack.capacity < stack_offset + 1) {
@@ -103,13 +102,13 @@ static bool call(VM *vm, Closure *closure, uint8_t argn)
 {
 	int f_arity = closure->function->arity;
 	if (f_arity != -1 && argn != f_arity) {
-		runtime_error(vm, "expected %d arguments but got %d.",
+		runtime_error(vm, "expected %d arguments but got %d\n",
 			      closure->function->arity, argn);
 		return false;
 	}
 
 	if (vm->frame_count >= FRAMES_MAX) {
-		runtime_error(vm, "stack overflow.");
+		runtime_error(vm, "stack overflow\n");
 		return false;
 	}
 
@@ -131,7 +130,7 @@ static bool call_value(VM *vm, Value callable, uint8_t argn)
 	default:
 		break;
 	}
-	runtime_error(vm, "can only call functions.");
+	runtime_error(vm, "can only call functions\n");
 	return false;
 }
 
@@ -187,7 +186,9 @@ static InterpretResult run(VM *vm)
 	 * HACK: use these temp values for
 	 * spe_do and corelib functions.
 	 */
-	uint8_t op_temp;
+	uint8_t op_temp = 0;
+	/* sum of spliced_argn - num of splice call */
+	uint8_t additional_spliced_argn = 0;
 	Value do_temp;
 	CallFrame *frame = &vm->frames[vm->frame_count - 1];
 #define READ_BYTE() (*frame->ip++)
@@ -214,7 +215,7 @@ do {									\
 	} else if (n == 1) {						\
 		v1 = peek(vm, 0);					\
 		if (!IS_NUMBER(v1)) {					\
-			runtime_error(vm, "expected number val.");	\
+			runtime_error(vm, "expected number val\n");	\
 			return IERROR;					\
 		}							\
 		PUSH(NUMBER_VAL(init_val op AS_NUMBER(v1)));		\
@@ -223,14 +224,14 @@ do {									\
 	v1 = peek(vm, n - 1);						\
 	v2 = peek(vm, n - 2);						\
 	if (!IS_NUMBER(v1) || !IS_NUMBER(v2)) {				\
-		runtime_error(vm, "expected number val.");		\
+		runtime_error(vm, "expected number val\n");		\
 		return IERROR;						\
 	}								\
 	res = AS_NUMBER(v1) op AS_NUMBER(v2);				\
 	for (i = n - 3; i >= 0; --i) {					\
 		v1 = peek(vm, i);					\
 		if (!IS_NUMBER(v1)) {					\
-			runtime_error(vm, "expected number val.");	\
+			runtime_error(vm, "expected number val\n");	\
 			return IERROR;					\
 		}							\
 		res = res op AS_NUMBER(v1);				\
@@ -246,13 +247,13 @@ do {									\
 	Value v1, v2;							\
 	v1 = peek(vm, n - 1);						\
 	if (!IS_NUMBER(v1)) {						\
-		runtime_error(vm, "expected number val.");		\
+		runtime_error(vm, "expected number val\n");		\
 		return IERROR;						\
 	}								\
 	for (i = n - 1; i >= 0; --i) {					\
 		v2 = peek(vm, i);					\
 		if (!IS_NUMBER(v2)) {					\
-			runtime_error(vm, "expected number val.");	\
+			runtime_error(vm, "expected number val.\n");	\
 			return IERROR;					\
 		}							\
 		res = AS_NUMBER(v1) op AS_NUMBER(v2);			\
@@ -334,6 +335,25 @@ do {									\
 			PUSH(x);
 			break;
 		}
+		case OP_SPLICE: {
+			Value v = pop(vm);
+			size_t sum_temp = additional_spliced_argn;
+			if (IS_TUPLE(v) || IS_ARRAY(v)) {
+				Array *arr = v.data.array;
+				for (int i = 0; i < arr->count; ++i)
+					PUSH(arr->values[i]);
+				if ((sum_temp + arr->count - 1) >= UINT8_MAX) {
+					runtime_error(vm, "can't have more than 254 arguments.\n");
+					return IERROR;
+				}
+				additional_spliced_argn += (arr->count - 1);
+			} else {
+				runtime_error(vm,
+					"splice expect a array or tuple\n");
+				return IERROR;
+			}
+			break;
+		}
 		case OP_POP:
 			pop(vm);
 			break;
@@ -377,7 +397,7 @@ do {									\
 			Value k = READ_CONSTANT();
 			Value value;
 			if (!table_get(vm->globals, k, &value)) {
-				runtime_error(vm, "Undefined variable '%s'.", AS_STRING(k)->chars);
+				runtime_error(vm, "Undefined variable '%s'\n", AS_STRING(k)->chars);
 				return IERROR;
 			}
 			PUSH(value);
@@ -392,7 +412,7 @@ do {									\
 			Value k = READ_CONSTANT();
 			if (table_set(vm->globals, k, peek(vm, 0))) {
 				table_delete(vm->globals, k);
-				runtime_error(vm, "Undefined variable '%s'.", AS_STRING(k)->chars);
+				runtime_error(vm, "Undefined variable '%s'\n", AS_STRING(k)->chars);
 				return IERROR;
 			}
 			break;
@@ -489,7 +509,18 @@ do {									\
 		}
 		case OP_CALL: {
 			uint8_t argn = READ_BYTE();
+			size_t sum_temp = argn;
+			if (sum_temp + additional_spliced_argn >= UINT8_MAX) {
+				runtime_error(vm, "can't have more than 254 arguments.\n");
+				return IERROR;
+			}
+			argn += additional_spliced_argn;
 			op_temp = argn;
+			/*
+			 * NOTE:
+			 * arguments number need to be deterministic
+			 * before call call_value.
+			 */
 			if (!call_value(vm, peek(vm, argn), argn)) {
 				return IERROR;
 			}
@@ -509,11 +540,14 @@ do {									\
 			vm->stack.stack_top = frame->slots;
 			PUSH(ret_val);
 			frame = &vm->frames[vm->frame_count - 1];
+			/* reset counter */
+			op_temp = 0;
+			additional_spliced_argn = 0;
 			break;
 		}
 		default:
-			runtime_error(vm, "unimplemented instruction: %d", instruction);
-			break;
+			runtime_error(vm, "unimplemented instruction: %d\n", instruction);
+			return IERROR;
 		}
 	}
 

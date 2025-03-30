@@ -20,7 +20,7 @@ static void repl()
 		reader = buffer;
 		init_parser(&vm, &p);
 		/*
-		 * Parse until we got a full form, 
+		 * Parse until we got a full form,
 		 * which means we allow multi-line expression(typical lisp way).
 		 */
 		while (p.status == PARSER_PENDING || p.status == PARSER_EOF) {
@@ -113,7 +113,7 @@ static void run_file(const char *path)
 	for (;;) {
 		init_parser(&vm, &p);
 		/*
-		 * Parse until we got a full form, 
+		 * Parse until we got a full form,
 		 * which means we allow multi-line expression(typical lisp way).
 		 */
 		while (p.status == PARSER_PENDING) {
@@ -128,7 +128,7 @@ static void run_file(const char *path)
 			// 	printf(" ");
 			// printf("^\n");
 			// printf("\nParse error: %s\n", p.error);
-			
+
 			printf("Parse error: %s\n", p.error);
 			exit(65);
 		}

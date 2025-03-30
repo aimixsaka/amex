@@ -8,7 +8,7 @@ static Closure *op_function(VM *vm, String *name, OpCode op)
 	f->arity = -1;
 	write_chunk(&f->chunk, op);
 	write_chunk(&f->chunk, OP_RETURN);
-	
+
 	Closure *closure = new_closure(vm, f);
 	return closure;
 }

@@ -6,7 +6,7 @@
 #ifdef DEBUG
 #define	DEBUG_TRACE_EXECUTION
 #define DEBUG_PRINT_CODE
-/* 
+/*
  * if this flag on, gc start at every `reallocate`,
  * bad for performace, good for debug gc
  * related memory management butgs.

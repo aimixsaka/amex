@@ -58,7 +58,7 @@ static double amex_exp10(int power)
 		if (power & 1)
 			res = res * base;
 		base = base * base;
-		power >>= 1;	
+		power >>= 1;
 	}
 	if (negative)
 		return 1.0 / res;
@@ -492,6 +492,7 @@ static bool check_eof(Parser *p, ParseState *state, const char c)
 	return false;
 }
 
+/* TODO: handle comment */
 static int dispatch_char(Parser *p, const char c) {
 	int done = 0;
 	while (!done && p->status == PARSER_PENDING) {

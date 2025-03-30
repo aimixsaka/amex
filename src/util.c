@@ -25,7 +25,7 @@ uint32_t hash_number(Number n)
 const void *tab_binary_search(const void *tab, size_t tabcount,
 			      size_t itemsize, const char *key)
 {
-	size_t low = 0;	
+	size_t low = 0;
 	size_t high = tabcount;
 	const char *t = (const char *)tab;
 	while (low < high) {

@@ -17,7 +17,7 @@ static uint32_t key_hash(Value k)
 {
 	uint32_t hash;
 	switch (k.type) {
-	case TYPE_SYMBOL:	
+	case TYPE_SYMBOL:
 	case TYPE_STRING:
 	case TYPE_KEYWORD:
 		hash = AS_STRING(k)->hash;

@@ -18,6 +18,8 @@
 /* ---------- Compiler related ----- */
 #define UINT8_COUNT			UINT8_MAX + 1
 #define MAX_QUOTE_LEVEL			10
+#define MAX_MACRO_EXPAND		20
+#define MAX_RECURSION			30
 
 
 /* ---------- VM related --------- */

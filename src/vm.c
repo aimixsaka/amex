@@ -397,22 +397,29 @@ do {									\
 			Value k = READ_CONSTANT();
 			Value value;
 			if (!table_get(vm->globals, k, &value)) {
-				runtime_error(vm, "Undefined variable '%s'\n", AS_STRING(k)->chars);
+				runtime_error(vm, "Undefined variable '%s'\n", AS_CSTRING(k));
 				return IERROR;
 			}
-			PUSH(value);
+			PUSH(value.data.array->values[1]);
 			break;
 		}
 		case OP_DEFINE_GLOBAL: {
 			Value k = READ_CONSTANT();
-			table_set(vm->globals, k, peek(vm, 0));
+			Value v;
+			if (!table_get(vm->globals, k, &v)) {
+				runtime_error(vm, "undeclared global variable: '%s'", AS_CSTRING(k));
+				return IERROR;
+			}
+			Array *fv_pair = AS_ARRAY(v);
+			fv_pair->values[1] = peek(vm, 0);
+			table_set(vm->globals, k, ARRAY_VAL(fv_pair));
 			break;
 		}
 		case OP_SET_GLOBAL: {
 			Value k = READ_CONSTANT();
 			if (table_set(vm->globals, k, peek(vm, 0))) {
 				table_delete(vm->globals, k);
-				runtime_error(vm, "Undefined variable '%s'\n", AS_STRING(k)->chars);
+				runtime_error(vm, "Undefined variable '%s'\n", AS_CSTRING(k));
 				return IERROR;
 			}
 			break;

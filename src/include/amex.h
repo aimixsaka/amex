@@ -93,6 +93,7 @@ typedef struct Value {
 #define NIL_VAL			((Value){ TYPE_NIL,      { .boolean = false } })
 #define BOOL_VAL(val)		((Value){ TYPE_BOOL,     { .boolean = val   } })
 #define NUMBER_VAL(val)		((Value){ TYPE_NUMBER,   { .number  = val   } })
+#define ARRAY_VAL(val)		((Value){ TYPE_ARRAY,    { .array   = val   } })
 #define TUPLE_VAL(val)		((Value){ TYPE_TUPLE,    { .array   = val   } })
 #define STRING_VAL(val)		((Value){ TYPE_STRING,   { .string  = val   } })
 #define FUNCTION_VAL(val)	((Value){ TYPE_FUNCTION, { .func    = val   } })
@@ -353,13 +354,19 @@ struct NativeFunction {
 	NativeFn		function;
 };
 
+/*
+ * we use index in Upval to track if we captured some Local,
+ * here we use is_captured to track
+ * if this local has been captured by any Upval
+ */
+#define LOCAL_IS_CAPTURED		1
+#define VAR_IS_MACRO			2
+
 /* Local variable representation */
 typedef struct {
 	int		depth;		/* lexical scope depth this local variable in */
 	int		index;
-	bool		is_captured;	/* we use index in Upval to track if we captured
-					   some Local, here we use is_captured to track
-					   if this local has been captured by any Upval */
+	uint8_t		flags;
 	String		*name;		/* local variable name */
 } Local;
 
@@ -406,6 +413,7 @@ struct Compiler {
 	int		constant_count;
 	int		local_count;
 	int		scope_depth;
+	uint8_t		recursion_guard;
 };
 
 

@@ -1,5 +1,4 @@
 #include <setjmp.h>
-#include <stdint.h>
 
 #include "util.h"
 #include "debug.h"
@@ -58,9 +57,16 @@ static void emit_constant(const Value constant)
 	emit_short((uint16_t)index);
 }
 
-static void define_global(String *name)
+static void define_global(String *name, uint8_t var_flags)
 {
-	int index = add_constant(STRING_VAL(name));
+	Array *fv_pair = new_array(current->vm, 2);
+	write_array(fv_pair, NUMBER_VAL(var_flags));
+	write_array(fv_pair, NIL_VAL);
+	Value var = STRING_VAL(name);
+	/* pre variable set for macro */
+	table_set(current->vm->globals, var, ARRAY_VAL(fv_pair));
+
+	int index = add_constant(var);
 	emit_byte(OP_DEFINE_GLOBAL);
 	emit_short((uint16_t)index);
 }
@@ -92,13 +98,14 @@ static void init_compiler(VM *vm, Compiler *c, FunctionType type, String *fname)
 	c->constant_count = 0;
 	c->local_count = 0;
 	c->scope_depth = 0;
+	c->recursion_guard = MAX_RECURSION;
 	c->function = new_function(c->vm);
 	if (type != SCRIPT_TYPE && fname)
 		c->function->name = copy_string(c->vm, fname->chars, fname->length);
 	Local *local = &c->locals[c->local_count++];
 	local->name = fname;
 	local->depth = 0;
-	local->is_captured = false;
+	local->flags = 0;
 	local->index = 0;
 	++c->constant_count;
 	current = c;
@@ -136,7 +143,7 @@ static int resolve_local(Compiler *c, String *name)
 /*
  * Add a uninitialized local variable.
  */
-static void add_local(String *name)
+static void add_local(String *name, uint8_t var_flags)
 {
 	if (current->local_count >= UINT8_COUNT) {
 		CERROR("too many local variables in function.\n");
@@ -144,7 +151,7 @@ static void add_local(String *name)
 	Local *l = &current->locals[current->local_count++];
 	l->name = name;
 	l->depth = -1;
-	l->is_captured = false;
+	l->flags = var_flags;
 	l->index = current->constant_count;
 }
 
@@ -173,7 +180,7 @@ static int resolve_upvalue(Compiler *c, String *name)
 
 	int local = resolve_local(c->enclosing, name);
 	if (local != -1) {
-		c->enclosing->locals[local].is_captured = true;
+		c->enclosing->locals[local].flags |= LOCAL_IS_CAPTURED;
 		return add_upvalue(c, (uint8_t)local, true);
 	}
 
@@ -197,7 +204,7 @@ static void end_scope(uint8_t n)
 	while (current->local_count > 0 &&
 	       current->locals[current->local_count-1].depth >
 	       current->scope_depth) {
-		if (current->locals[current->local_count - 1].is_captured) {
+		if (current->locals[current->local_count - 1].flags & LOCAL_IS_CAPTURED) {
 
 			/*
 			 * here is a brilliant idea:
@@ -217,7 +224,7 @@ static void end_scope(uint8_t n)
  * (of which declaration *really* mean).
  * Will check if declared before.
  */
-static void declare_variable(String *v)
+static void declare_variable(String *v, uint8_t var_flags)
 {
 	/* find till initialized and lower depth local variable */
 	for (int i = current->local_count - 1; i >= 0; --i) {
@@ -233,7 +240,7 @@ static void declare_variable(String *v)
 		}
 	}
 
-	add_local(v);
+	add_local(v, var_flags);
 }
 
 /*
@@ -250,13 +257,13 @@ static void mark_initialized()
  */
 static void declare_arg(String *name)
 {
-	declare_variable(name);
+	declare_variable(name, 0);
 	mark_initialized();
 }
 
 /* forward delcaration */
 static bool check_args(const Array *arr);
-static void compile_ast(const Value *ast, uint8_t flags);
+static void compile_ast(Value ast, uint8_t flags);
 static void compile_symbol(String *name, bool get_op);
 static void compile_args(const Array *arr);
 static void compile_body(uint8_t elmn, const Value *elms, uint8_t flags);
@@ -291,7 +298,7 @@ static void quasiquote(Value x, int depth, int level, uint8_t flags)
 			if (strcmp(sym, "unquote") == 0) {
 				if (level == 0) {
 					flags |= OPT_ACCEPT_SPLICE;
-					compile_ast(&elms[1], flags);
+					compile_ast(elms[1], flags);
 					return;
 				} else {
 					--level;
@@ -354,7 +361,7 @@ static void spe_splice(uint8_t argn, const Value *argv, uint8_t flags)
 		    (strcmp(AS_CSTRING(tup->values[0]), "splice") == 0))
 			CERROR("multi level splice is unsupported.\n");
 	}
-	compile_ast(&head, flags);
+	compile_ast(head, flags);
 	emit_byte(OP_SPLICE);
 }
 
@@ -372,11 +379,13 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 	if (argn == 1) {	/* (fn [a]) */
 		switch (head.type) {
 		case TYPE_KEYWORD:
-		case TYPE_SYMBOL:	
+		case TYPE_SYMBOL:
 			CERROR("expect function parameters.\n");
 		case TYPE_ARRAY:
 			init_compiler(current->vm, &compiler, FUNCTION_TYPE, NULL);
 			args = AS_ARRAY(head);
+			if (args->count >= UINT8_MAX)
+				CERROR("can't have more than 255 parameters.\n");
 			check_args(args);
 			compiler.function->arity = args->count;
 			emit_byte(OP_NIL); /* return value */
@@ -388,6 +397,8 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 		switch (head.type) {
 		case TYPE_ARRAY:	/* (fn [a b] (+ a b) ...) */
 			args = AS_ARRAY(head);
+			if (args->count >= UINT8_MAX)
+				CERROR("can't have more than 255 parameters.\n");
 			if (!check_args(args)) {
 				CERROR("function parameter should be a symbol.\n");
 			}
@@ -403,6 +414,8 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 			}
 			fname = AS_STRING(head);
 			args = AS_ARRAY(argv[1]);
+			if (args->count >= UINT8_MAX)
+				CERROR("can't have more than 255 parameters.\n");
 			if (!check_args(args)) {
 				CERROR("function parameter should be a symbol.\n");
 			}
@@ -431,25 +444,36 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 
 static void spe_def(uint8_t argn, const Value *argv, uint8_t flags)
 {
-	if (argn != 2) {
-		CERROR("def need exactly 2 arguments.\n");
+	if (argn < 2) {
+		CERROR("def need at least 2 arguments.\n");
 	}
 	Value k = argv[0];
-	Value v = argv[1];
 	if (!IS_SYMBOL(k)) {
 		CERROR("variable name should be a symbol.\n");
 	}
+
+	uint8_t var_flags = 0;
+	for (int i = 1; i < argn - 1; ++i) {
+		if (!IS_KEYWORD(argv[i]))
+			CERROR("variable attribute should be a keyword.\n");
+		if (strcmp(AS_CSTRING(argv[i]), "macro") == 0)
+			var_flags |= VAR_IS_MACRO;
+		else
+			CERROR("unimplemented variable attribute: %s\n", AS_CSTRING(argv[i]));
+	}
+
 	String *var = AS_STRING(k);
+	Value v = argv[argn - 1];
 
 	/* define local variable */
 	if (current->scope_depth > 0) {
-		declare_variable(var);
-		compile_ast(&v, flags);
+		declare_variable(var, var_flags);
+		compile_ast(v, flags);
 		mark_initialized();
 	} else {
 	/* define global variable */
-		compile_ast(&v, flags);
-		define_global(var);
+		compile_ast(v, flags);
+		define_global(var, var_flags);
 	}
 }
 
@@ -463,7 +487,7 @@ static void spe_set(uint8_t argn, const Value *argv, uint8_t flags)
 	if (!IS_SYMBOL(k)) {
 		CERROR("variable name should be a symbol.\n");
 	}
-	compile_ast(&v, flags);
+	compile_ast(v, flags);
 	String *var = AS_STRING(k);
 	compile_symbol(var, false);
 }
@@ -501,18 +525,18 @@ static void patch_jump(int index)
 }
 
 static void emit_if(const Value *b, const Value *exp,
-		    bool has_else, const Value *e2, uint8_t flags)
+		    const Value *e2, uint8_t flags)
 {
 	int index1, index2;
-	compile_ast(b, flags);
+	compile_ast(*b, flags);
 	index1 = emit_jump(OP_JUMP_IF_FALSE);
-	compile_ast(exp, flags);
-	if (has_else) {
+	compile_ast(*exp, flags);
+	if (e2) {
 		index2 = emit_jump(OP_JUMP);
 	}
 	patch_jump(index1);
-	if (has_else) {
-		compile_ast(e2, flags);
+	if (e2) {
+		compile_ast(*e2, flags);
 		patch_jump(index2);
 	}
 }
@@ -521,9 +545,9 @@ static void emit_if(const Value *b, const Value *exp,
 static void spe_if(uint8_t argn, const Value *argv, uint8_t flags)
 {
 	if (argn == 2)
-		emit_if(&argv[0], &argv[1], false, NULL, flags);
+		emit_if(&argv[0], &argv[1], NULL, flags);
 	else if (argn == 3)
-		emit_if(&argv[0], &argv[1], true, &argv[2], flags);
+		emit_if(&argv[0], &argv[1], &argv[2], flags);
 	else
 		CERROR("expect 2 or 3 arguments.");
 }
@@ -553,7 +577,7 @@ static void spe_while(uint8_t argn, const Value *argv, uint8_t flags)
 	begin_scope();
 
 	int loop_start = current_chunk()->count;
-	compile_ast(&argv[0], flags);
+	compile_ast(argv[0], flags);
 
 	int exit_jump = emit_jump(OP_JUMP_IF_FALSE);
 
@@ -594,7 +618,6 @@ static const SpecialFn *get_special_fn(const char *name)
 static void compile_symbol(String *name, bool get_op)
 {
 	uint8_t op;
-	/* TODO: resolve upvalue */
 	int arg = resolve_local(current, name);
 	if (arg != -1) {
 		op = get_op ? OP_GET_LOCAL : OP_SET_LOCAL;
@@ -634,18 +657,73 @@ static void compile_body(uint8_t elemn, const Value *elms, uint8_t flags)
 		return;
 	}
 	for (int i = 0; i < elemn; ++i) {
-		compile_ast(&elms[i], flags);
+		compile_ast(elms[i], flags);
 		++current->constant_count;
 	}
 }
 
+static bool macroexpand1(Value x, Value *out,
+			 const SpecialFn **sp_fn)
+{
+	if (!IS_TUPLE(x))
+		return false;
+	const Array *form = AS_ARRAY(x);
+	if (form->count == 0)
+		return false;
+	Value head = form->values[0];
+	if (!IS_SYMBOL(head))
+		return false;
+
+	String *s = AS_STRING(head);
+	const char *name = s->chars;
+	/*
+		* Here is a interesting semantic choice though:
+		*   "special forms have higher priority than user defined functions".
+		*/
+	const SpecialFn *fn = get_special_fn(name);
+	if (fn) {
+		*sp_fn = fn;
+		return false;
+	}
+
+	Value tmp;
+	Compiler c;
+	if (!table_get(current->vm->globals, STRING_VAL(s), &tmp))
+		return false;
+	Array *fv_pair = AS_ARRAY(tmp);
+	if (!((uint8_t)AS_NUMBER(fv_pair->values[0]) & VAR_IS_MACRO) ||
+		!IS_CLOSURE(fv_pair->values[1]))
+		return false;
+	if (form->count - 1 >= UINT8_MAX) {
+		CERROR("can't have more than 255 arguments.\n");
+	}
+
+	init_compiler(current->vm, &c, SCRIPT_TYPE, NULL);
+	/*
+	 * TODO:real "local variable as macro" support.
+	 * (use global variables table and pass that as argument for interpret() ?)
+	 */
+	Closure *closure = AS_CLOSURE(fv_pair->values[1]);
+	emit_constant(CLOSURE_VAL(closure));
+	uint8_t argn = form->count - 1;
+	Value *argv = form->values + 1;
+	for (int i = 0; i < argn; ++i)
+		emit_constant(argv[i]);
+	emit_bytes(OP_CALL, (uint8_t)argn);
+	Function *f = end_compiler();
+	InterpretResult res = interpret(current->vm, f);
+	if (res.status == INTERPRET_RUNTIME_ERROR)
+		CERROR("macro expand failed.\n");
+	*out = res.ret;
+	return true;
+}
+
 static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 {
-	if (elemn >= 255) {
-		CERROR("can't have more than 254 arguments.\n");
+	if (elemn >= UINT8_MAX) {
+		CERROR("can't have more than 255 arguments.\n");
 	}
 	if (elemn == 0) {
-		/* TODO: emit empty tuple constant */
 		Value x;
 		x.type = TYPE_TUPLE;
 		x.data.array = new_array(current->vm, 0);
@@ -656,35 +734,20 @@ static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 	Value head = elms[0];
 	switch (head.type) {
 	case TYPE_SYMBOL: {
-		/* 
-		 * FIXME: We should use inline byte code to replace
-		 * these hardcoded symbol match in the future, so
-		 * + - * / can be just normal functions, and can be
-		 * used as arguments ...
-		 */
 		String *s = AS_STRING(head);
 		uint8_t argn = elemn - 1;
 		const Value *argv = elms + 1;
 
-		/*
-		 * Here is a interesting semantic choice though:
-		 *   "special forms have higher priority than user defined functions".
-		 */
-		const SpecialFn *sp_fn = get_special_fn(s->chars);
-		if (sp_fn) {
-			sp_fn->fn(argn, argv, flags);
-			return;
-		}
 		compile_symbol(s, true);
 		for (int i = 0; i < argn; ++i)
-			compile_ast(&argv[i], flags);
+			compile_ast(argv[i], flags);
 		emit_bytes(OP_CALL, argn);
 		break;
 	}
 	case TYPE_TUPLE:
 		compile_form(head.data.array->count, head.data.array->values, flags);
 		for (int i = 1; i < elemn; ++i) {
-			compile_ast(&elms[i], flags);
+			compile_ast(elms[i], flags);
 		}
 		emit_bytes(OP_CALL, elemn - 1);
 		break;
@@ -693,31 +756,46 @@ static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 	}
 }
 
-static void compile_ast(const Value *ast, uint8_t flags)
+static void compile_ast(Value ast, uint8_t flags)
 {
-	switch (ast->type) {
-	case TYPE_NIL:
-		emit_byte(OP_NIL);
-		break;
-	case TYPE_BOOL:
-		emit_byte(AS_BOOL(*ast) ? OP_TRUE : OP_FALSE);
-		break;
-	case TYPE_NUMBER:
-	case TYPE_STRING:
-	case TYPE_KEYWORD:
-	case TYPE_ARRAY:
-		emit_constant(*ast);
-		break;
-	case TYPE_SYMBOL:
-		compile_symbol(AS_STRING(*ast), true);
-		break;
-	case TYPE_TUPLE: {
-		compile_form(ast->data.array->count, ast->data.array->values, flags);
-		break;
+
+	if (--current->recursion_guard <= 0)
+		CERROR("ast recursed too deep.\n");
+
+	const SpecialFn *sp_fn = NULL;
+	/* we expand the macro first, then execute the expansion result */
+	uint8_t macroi = MAX_MACRO_EXPAND;
+	while (macroi && macroexpand1(ast, &ast, &sp_fn)) {
+		--macroi;
 	}
-	default:
-		fprintf(stderr, "compile: Unimplemented!\n");
-		break;
+	if (sp_fn) {
+		sp_fn->fn(ast.data.array->count - 1, ast.data.array->values + 1, flags);
+	} else {
+		/* TODO: remove redundant constant match */
+		switch (ast.type) {
+		case TYPE_NIL:
+			emit_byte(OP_NIL);
+			break;
+		case TYPE_BOOL:
+			emit_byte(AS_BOOL(ast) ? OP_TRUE : OP_FALSE);
+			break;
+		case TYPE_NUMBER:
+		case TYPE_STRING:
+		case TYPE_KEYWORD:
+		case TYPE_ARRAY:
+			emit_constant(ast);
+			break;
+		case TYPE_SYMBOL:
+			compile_symbol(AS_STRING(ast), true);
+			break;
+		case TYPE_TUPLE: {
+			compile_form(ast.data.array->count, ast.data.array->values, flags);
+			break;
+		}
+		default:
+			fprintf(stderr, "compile: Unimplemented!\n");
+			break;
+		}
 	}
 }
 
@@ -730,6 +808,6 @@ Function *compile(VM *vm, Value ast)
 		return NULL;
 	}
 	init_compiler(vm, &compiler, SCRIPT_TYPE, NULL);
-	compile_ast(&ast, 0);
+	compile_ast(ast, 0);
 	return end_compiler();
 }

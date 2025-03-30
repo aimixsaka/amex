@@ -17,14 +17,17 @@ Table *core_env(VM *vm, Table *replacement)
 {
 	Table *env = (replacement == NULL) ?
 		new_table(vm, 12) : replacement;
-#define SET_ENTRY(name, op)					\
-do {								\
-	String *s = copy_string(vm, name, strlen(name));	\
-	table_set(						\
-		env,						\
-		STRING_VAL(s),					\
-		CLOSURE_VAL(op_function(vm, s, op))			\
-	);							\
+#define SET_ENTRY(name, op)						\
+do {									\
+	String *s = copy_string(vm, name, strlen(name));		\
+	Array *fv_pair = new_array(vm, 2);				\
+	write_array(fv_pair, NUMBER_VAL(0));				\
+	write_array(fv_pair, CLOSURE_VAL(op_function(vm, s, op)));	\
+	table_set(							\
+		env,							\
+		STRING_VAL(s),						\
+		ARRAY_VAL(fv_pair)					\
+	);								\
 } while (0)
 
 	SET_ENTRY("+", OP_SUMN);

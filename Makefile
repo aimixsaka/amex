@@ -37,7 +37,7 @@ memcheck: $(BUILD_DIR)/$(TARGET_EXEC)
 	valgrind --leak-check=yes $(BUILD_DIR)/$(TARGET_EXEC)
 
 format:
-	@sed -i -E 's/[ \t]+$$//' *.h *.c
+	@sed -i -E 's/[ \t]+$$//' $(SRC_DIRS)/*.h $(SRC_DIRS)/*.c
 
 -include $(DEPS)
 

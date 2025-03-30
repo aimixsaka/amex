@@ -76,6 +76,7 @@ typedef struct Value {
 #define IS_SYMBOL(value)	((value).type == TYPE_SYMBOL)
 #define IS_NUMBER(value)	((value).type == TYPE_NUMBER)
 #define IS_STRING(value)	((value).type == TYPE_STRING)
+#define IS_KEYWORD(value)	((value).type == TYPE_KEYWORD)
 #define IS_ARRAY(value)		((value).type == TYPE_ARRAY)
 #define IS_TUPLE(value)		((value).type == TYPE_TUPLE)
 #define IS_FUNCTION(value)	((value).type == TYPE_FUNCTION)
@@ -175,6 +176,7 @@ typedef enum {
 	PTYPE_TABLE,
 	PTYPE_STRING,
 	PTYPE_TOKEN,
+	PTYPE_KEYWORD,
 	PTYPE_SPECIAL_FORM,
 } ParserType;
 

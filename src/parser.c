@@ -144,6 +144,7 @@ static void parser_push(Parser *p, ParserType type)
 		top->buf.string.buffer = new_buffer(p->vm, 10);
 		top->buf.string.state = STRING_STATE_BASE;
 		break;
+	case PTYPE_KEYWORD:
 	case PTYPE_TOKEN:
 		top->buf.string.buffer = new_buffer(p->vm, 8);
 		break;
@@ -221,7 +222,7 @@ static inline bool str_eq(const char *s1, uint32_t len1,
 /*
  * Construct underlaying token from raw chars(parser buffer)
  */
-static Value buf_build_token(Parser *p, Buffer *buf)
+static Value buf_build_token(Parser *p, Buffer *buf, bool is_keyword)
 {
 	Value x;
 	Number n;
@@ -229,25 +230,25 @@ static Value buf_build_token(Parser *p, Buffer *buf)
 	const char first_char = buf->data[0];
 	const char *start = buf->data;
 	const char *end = buf->data + len;
-	if (read_as_num(start, end, &n, false)) {
+	if (is_keyword) {
+		x.type = TYPE_KEYWORD;
+		x.data.string = buf_to_str(p->vm, buf);
+	} else if (read_as_num(start, end, &n, false)) {
 		x.type = TYPE_NUMBER;
 		x.data.number = n;
 	} else if (str_eq(start, len, "nil", 3)) {
 		x.type = TYPE_NIL;
-		x.data.boolean = 0;
+		x.data.boolean = false;
 	} else if (str_eq(start, len, "true", 4)) {
 		x.type = TYPE_BOOL;
-		x.data.boolean = 1;
+		x.data.boolean = true;
 	} else if (str_eq(start, len, "false", 5)) {
 		x.type = TYPE_BOOL;
-		x.data.boolean = 0;
+		x.data.boolean = false;
 	} else {
 		if (is_digit(first_char)) {
 			PERROR(p, "Symbols cannot start with digits.");
 			x.type = TYPE_NIL;
-		} else if (first_char == ':') {
-			x.type = TYPE_KEYWORD;
-			x.data.string = buf_to_str(p->vm, buf);
 		} else {
 			x.type = TYPE_SYMBOL;
 			x.data.string = buf_to_str(p->vm, buf);
@@ -272,6 +273,10 @@ static int main_state(Parser *p, char c)
 	}
 	if (c == '"') {
 		parser_push(p, PTYPE_STRING);
+		return 1;
+	}
+	if (c == ':') {
+		parser_push(p, PTYPE_KEYWORD);
 		return 1;
 	}
 	if (is_whitespace(c))
@@ -328,7 +333,8 @@ static int token_state(Parser *p, const char c)
 	Buffer *buf = top->buf.string.buffer;
 	if (is_whitespace(c) || c == ')'|| c == ']' || c == '}') {
 		parser_pop(p);
-		parser_top_append(p, buf_build_token(p, buf));
+		parser_top_append(p, buf_build_token(p, buf,
+					top->type == PTYPE_KEYWORD));
 		return (c == ')' || c == ']' || c == '}') ? 0 : 1;
 	} else if (is_symbol_char(c)) {
 		buf_push(buf, c);
@@ -471,6 +477,7 @@ static bool check_eof(Parser *p, ParseState *state, const char c)
 			return true;
 		}
 	case PTYPE_TOKEN:
+	case PTYPE_KEYWORD:
 	case PTYPE_TUPLE:
 	case PTYPE_ARRAY:
 	case PTYPE_STRING:
@@ -494,6 +501,9 @@ static int dispatch_char(Parser *p, const char c) {
 			done = root_state(p, c);
 			break;
 		case PTYPE_TOKEN:
+			done = token_state(p, c);
+			break;
+		case PTYPE_KEYWORD:
 			done = token_state(p, c);
 			break;
 		case PTYPE_TUPLE:

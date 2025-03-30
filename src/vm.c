@@ -417,11 +417,14 @@ do {									\
 		}
 		case OP_SET_GLOBAL: {
 			Value k = READ_CONSTANT();
-			if (table_set(vm->globals, k, peek(vm, 0))) {
-				table_delete(vm->globals, k);
-				runtime_error(vm, "Undefined variable '%s'\n", AS_CSTRING(k));
+			Value v;
+			if (!table_get(vm->globals, k, &v)) {
+				runtime_error(vm, "undefined global variable: '%s'", AS_CSTRING(k));
 				return IERROR;
 			}
+			Array *fv_pair = AS_ARRAY(v);
+			fv_pair->values[1] = peek(vm, 0);
+			table_set(vm->globals, k, ARRAY_VAL(fv_pair));
 			break;
 		}
 		case OP_JUMP_IF_FALSE: {

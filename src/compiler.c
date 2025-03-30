@@ -756,6 +756,12 @@ static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 	}
 }
 
+static void compile_array(uint8_t elemn, const Value *elms, uint8_t flags)
+{
+	for (int i = 0; i < elemn; ++i)
+		compile_ast(elms[i], flags);
+}
+
 static void compile_ast(Value ast, uint8_t flags)
 {
 
@@ -771,19 +777,12 @@ static void compile_ast(Value ast, uint8_t flags)
 	if (sp_fn) {
 		sp_fn->fn(ast.data.array->count - 1, ast.data.array->values + 1, flags);
 	} else {
-		/* TODO: remove redundant constant match */
 		switch (ast.type) {
 		case TYPE_NIL:
 			emit_byte(OP_NIL);
 			break;
 		case TYPE_BOOL:
 			emit_byte(AS_BOOL(ast) ? OP_TRUE : OP_FALSE);
-			break;
-		case TYPE_NUMBER:
-		case TYPE_STRING:
-		case TYPE_KEYWORD:
-		case TYPE_ARRAY:
-			emit_constant(ast);
 			break;
 		case TYPE_SYMBOL:
 			compile_symbol(AS_STRING(ast), true);
@@ -792,9 +791,18 @@ static void compile_ast(Value ast, uint8_t flags)
 			compile_form(ast.data.array->count, ast.data.array->values, flags);
 			break;
 		}
-		default:
-			fprintf(stderr, "compile: Unimplemented!\n");
+		case TYPE_ARRAY:
+			compile_array(ast.data.array->count, ast.data.array->values, flags);
 			break;
+		case TYPE_FUNCTION:
+                case TYPE_CLOSURE:
+                case TYPE_NATIVE:
+			CERROR("unexpected function type in compile_ast.\n");
+                /* TODO: implement table compiling */
+                case TYPE_TABLE:
+			CERROR("compile table: unimplemented.\n");
+                default:
+                        emit_constant(ast);
 		}
 	}
 }

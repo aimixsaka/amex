@@ -1,0 +1,7 @@
+(def defn :macro
+  (fn [name args body]
+      ~(def ,name (fn ,args ,body))))
+
+(defn plus [a b] (+ a b))
+
+(print (plus 3 4))

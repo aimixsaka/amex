@@ -279,6 +279,10 @@ static int main_state(Parser *p, char c)
 		parser_push(p, PTYPE_KEYWORD);
 		return 1;
 	}
+	if (c == '#') {
+		parser_push(p, PTYPE_COMMENT);
+		return 1;
+	}
 	if (is_whitespace(c))
 		return 1;
 	if (is_special_char(c)) {
@@ -468,14 +472,23 @@ static int special_char_state(Parser *p, const char c)
 	return main_state(p, c);
 }
 
+static int comment_state(Parser *p, const char c)
+{
+	if (c == '\n')
+		parser_pop(p);
+	return 1;
+}
+
 static bool check_eof(Parser *p, ParseState *state, const char c)
 {
 	switch (state->type) {
+	case PTYPE_COMMENT:
 	case PTYPE_ROOT:
 		if (c == '\0') {
-			p->status = PARSER_FULL;
+			p->status = PARSER_EOF;
 			return true;
 		}
+		break;
 	case PTYPE_TOKEN:
 	case PTYPE_KEYWORD:
 	case PTYPE_TUPLE:
@@ -488,11 +501,11 @@ static bool check_eof(Parser *p, ParseState *state, const char c)
 			p->error = UNEXPECTED_EOF;
 			return true;
 		}
+		break;
 	}
 	return false;
 }
 
-/* TODO: handle comment */
 static int dispatch_char(Parser *p, const char c) {
 	int done = 0;
 	while (!done && p->status == PARSER_PENDING) {
@@ -521,6 +534,9 @@ static int dispatch_char(Parser *p, const char c) {
 			break;
 		case PTYPE_SPECIAL_FORM:
 			done = special_char_state(p, c);
+			break;
+		case PTYPE_COMMENT:
+			done = comment_state(p, c);
 			break;
 		}
 	}
@@ -559,6 +575,5 @@ void init_parser(VM *vm, Parser *p)
 	p->index = 0;
 	p->error = NULL;
 	p->status = PARSER_PENDING;
-	p->value.type = TYPE_NIL;
 	parser_push(p, PTYPE_ROOT);
 }

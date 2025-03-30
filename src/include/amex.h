@@ -179,6 +179,7 @@ typedef enum {
 	PTYPE_TOKEN,
 	PTYPE_KEYWORD,
 	PTYPE_SPECIAL_FORM,
+	PTYPE_COMMENT,
 } ParserType;
 
 typedef struct {

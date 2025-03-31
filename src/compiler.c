@@ -733,23 +733,15 @@ static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 
 	Value head = elms[0];
 	switch (head.type) {
-	case TYPE_SYMBOL: {
-		String *s = AS_STRING(head);
-		uint8_t argn = elemn - 1;
-		const Value *argv = elms + 1;
-
-		compile_symbol(s, true);
-		for (int i = 0; i < argn; ++i)
-			compile_ast(argv[i], flags);
-		emit_bytes(OP_CALL, argn);
-		break;
-	}
+	case TYPE_SYMBOL:
+		if (!get_special_fn(AS_CSTRING(head)))
+			++current->constant_count;
 	case TYPE_TUPLE:
-		compile_form(head.data.array->count, head.data.array->values, flags);
-		for (int i = 1; i < elemn; ++i) {
+		for (int i = 0; i < elemn; ++i) {
 			compile_ast(elms[i], flags);
 		}
 		emit_bytes(OP_CALL, elemn - 1);
+		--current->constant_count;
 		break;
 	default:
 		CERROR("expect a function call.\n");

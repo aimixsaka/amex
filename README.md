@@ -1,6 +1,6 @@
 ## Overview
 
-- Janet inspired syntax.
+- Janet inspired syntax (nearly subset lol).
 - Stack-based VM.
 - Learning purpose toy language.
 - Lisp explanation of `amex`.

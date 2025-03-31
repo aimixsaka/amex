@@ -36,8 +36,7 @@ static void repl()
 			reader += parse_cstring(&p, reader);
 		}
 
-		if (p.status == PARSER_ERROR ||
-		    (p.error && p.status != PARSER_EOF)) {
+		if (p.status == PARSER_ERROR) {
 			unsigned i;
 			printf("\n");
 			printf("%s\n", buffer);

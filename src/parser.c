@@ -5,7 +5,13 @@ static void dump_parse_state(ParseState *state)
 
 }
 
-#define PERROR(p, e) ((p)->error = (e), (p)->status = PARSER_ERROR)
+#define PERROR(p, e)			\
+do {					\
+	if ((p)->error)			\
+		break;			\
+	(p)->error = (e);		\
+	(p)->status = PARSER_ERROR;	\
+} while (0)
 
 static const char UNEXPECTED_CLOSING_DELIM[] = "Unexpected closing delimiter";
 static const char UNEXPECTED_EOF[] = "Unexpected EOF";
@@ -138,6 +144,7 @@ static void parser_push(Parser *p, ParserType type)
 	}
 	top->type = type;
 	switch (type) {
+	case PTYPE_COMMENT:
 	case PTYPE_ROOT:
 		break;
 	case PTYPE_STRING:

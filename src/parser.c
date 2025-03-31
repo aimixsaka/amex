@@ -1,10 +1,6 @@
 #include "include/amex.h"
 
-static void dump_parse_state(ParseState *state)
-{
-
-}
-
+/* keep first error */
 #define PERROR(p, e)			\
 do {					\
 	if ((p)->error)			\
@@ -121,25 +117,28 @@ static bool read_as_num(const char *str, const char *end,
 
 static ParseState *parser_peek(Parser *p)
 {
-	if (!p->count) {
-		PERROR(p, "Parser stack underflow. (Peek)");
-		return NULL;
-	}
-	return p->stack + p->count - 1;
+	return p->parser_top - 1;
 }
 
 static void parser_push(Parser *p, ParserType type)
 {
 	ParseState *top;
-	if (p->count >= p->capacity) {
-		uint32_t new_capability = GROW_CAPACITY(p->capacity);
-		p->stack = GROW_ARRAY(ParseState, p->stack, p->capacity, new_capability);
-		p->capacity = new_capability;
+	size_t stack_offset = p->parser_top - p->stack;
+	if (stack_offset >= PARSER_STACK_MAX) {
+		PERROR(p, "Parser Stack Overflow.");
+		return;
 	}
-	++p->count;
+	if (p->capacity < stack_offset + 1) {
+		int old_capacity = p->capacity;
+		p->capacity = GROW_CAPACITY(p->capacity);
+		p->stack = GROW_ARRAY(ParseState, p->stack,
+				      old_capacity, p->capacity);
+		p->parser_top = p->stack + stack_offset;
+	}
+	++p->parser_top;
 	top = parser_peek(p);
 	if (!top) {
-		fprintf(stderr, "top is null ?\n");
+		PERROR(p, "top is null ?");
 		return;
 	}
 	top->type = type;
@@ -171,11 +170,12 @@ static void parser_push(Parser *p, ParserType type)
 
 static ParseState *parser_pop(Parser *p)
 {
-	if (!p->count) {
+	--p->parser_top;
+	if (!p->parser_top) {
 		PERROR(p, "Parser stack underflow. (Pop)");
 		return NULL;
 	}
-	return p->stack + --p->count;
+	return p->parser_top;
 }
 
 /* Append Value x to current top most state in Parser stack */
@@ -567,6 +567,15 @@ int parse_cstring(Parser *p, const char *string)
 	return bytes_read;
 }
 
+void reset_parser(Parser *p)
+{
+	p->index = 0;
+	p->error = NULL;
+	p->parser_top = p->stack;
+	p->status = PARSER_PENDING;
+	parser_push(p, PTYPE_ROOT);
+}
+
 void free_parser(Parser *p)
 {
 	FREE_ARRAY(ParseState, p->stack, p->capacity);
@@ -577,10 +586,6 @@ void init_parser(VM *vm, Parser *p)
 	ParseState *data = NULL;
 	p->vm = vm;
 	p->stack = data;
-	p->count = 0;
 	p->capacity = 0;
-	p->index = 0;
-	p->error = NULL;
-	p->status = PARSER_PENDING;
-	parser_push(p, PTYPE_ROOT);
+	reset_parser(p);
 }

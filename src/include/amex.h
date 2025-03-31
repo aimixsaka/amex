@@ -202,12 +202,13 @@ typedef struct {
 	} buf;
 } ParseState;
 
+/* TODO: remove index ? */
 typedef struct {
 	VM		*vm;
-	uint32_t	count;
 	uint32_t	capacity;
 	uint32_t	index;
 	ParseState	*stack;	/* parser stack to process parsing */
+	ParseState	*parser_top;
 	Value		value;	/* final value after parsing */
 	uint32_t	status;
 	const char	*error;
@@ -223,6 +224,7 @@ typedef struct {
 
 void init_parser(VM *vm, Parser *p);
 void free_parser(Parser *p);
+void reset_parser(Parser *p);
 int parse_cstring(Parser *p, const char *string);
 /* ==== Parser Related End ==== */
 

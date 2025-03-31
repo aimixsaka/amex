@@ -46,12 +46,16 @@ static void free_object(GCObject *object)
 		FREE(String, object);
 		break;
 	}
-	case OBJ_ARRAY:
+	case OBJ_ARRAY: {
+		free_array((Array*)object);
 		FREE(Array, object);
 		break;
-	case OBJ_TABLE:
+	}
+	case OBJ_TABLE: {
+		free_table((Table*)object);
 		FREE(Table, object);
 		break;
+	}
 	case OBJ_FUNCTION: {
 		Function *function = (Function*)object;
 		free_chunk(&function->chunk);

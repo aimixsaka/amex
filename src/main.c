@@ -1,5 +1,6 @@
 #include "include/amex.h"
 #include "debug.h"
+#include <stdlib.h>
 
 
 static void repl()
@@ -14,11 +15,12 @@ static void repl()
 	puts("Press Ctrl+d to exit.");
 	init_vm(&vm);
 	set_vm_globals(&vm, core_env(&vm, NULL));
+	init_parser(&vm, &p);
 	for (;;) {
 		/* Flush the input buffer */
 		buffer[0] = '\0';
 		reader = buffer;
-		init_parser(&vm, &p);
+		reset_parser(&p);
 		/*
 		 * Parse until we got a full form,
 		 * which means we allow multi-line expression(typical lisp way).
@@ -104,13 +106,15 @@ static void run_file(const char *path)
 	Parser p;
 	Function *f;
 	VM vm;
+	int exit_code = 0;
 	const char *reader = source;
 
 
 	init_vm(&vm);
 	set_vm_globals(&vm, core_env(&vm, NULL));
+	init_parser(&vm, &p);
 	for (;;) {
-		init_parser(&vm, &p);
+		reset_parser(&p);
 		/*
 		 * Parse until we got a full form,
 		 * which means we allow multi-line expression(typical lisp way).
@@ -129,7 +133,8 @@ static void run_file(const char *path)
 			// printf("\nParse error: %s\n", p.error);
 
 			printf("Parse error: %s\n", p.error);
-			exit(65);
+			exit_code = 65;
+			goto on_error;
 		}
 		if (*reader == '\0')
 			break;
@@ -141,17 +146,23 @@ static void run_file(const char *path)
 		puts("**** dump ast end ****");
 #endif /* DEBUG_TRACE_EXECUTION */
 		f = compile(&vm, p.value);
-		if (f == NULL)
-			exit(66);
+		if (f == NULL) {
+			exit_code = 66;
+			goto on_error;
+		}
 
 		/* Execute bytecode in VM */
 		InterpretResult res = interpret(&vm, f);
-		if (res.status == INTERPRET_RUNTIME_ERROR)
-			exit(67);
+		if (res.status == INTERPRET_RUNTIME_ERROR) {
+			exit_code = 67;
+			goto on_error;
+		}
 	}
+on_error:
 	free(source);
 	free_parser(&p);
 	free_vm(&vm);
+	exit(exit_code);
 }
 
 int main(int argc, const char *argv[])

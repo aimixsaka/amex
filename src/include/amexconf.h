@@ -14,6 +14,8 @@
 /* ---------- Object related ----- */
 #define TABLE_MAX_LOAD			0.75
 
+/* ---------- Parser related ----- */
+#define PARSER_STACK_MAX			1024
 
 /* ---------- Compiler related ----- */
 #define UINT8_COUNT			UINT8_MAX + 1
@@ -25,6 +27,6 @@
 /* ---------- VM related --------- */
 /* max call depth */
 #define FRAMES_MAX			1024
-#define STACK_MAX			4096
+#define VM_STACK_MAX			4096
 
 #endif /* #define AMEXCONF_H_defined */

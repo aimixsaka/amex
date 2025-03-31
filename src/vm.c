@@ -55,7 +55,7 @@ static void runtime_error(VM *vm, const char *format, ...)
 static bool push(VM *vm, CallFrame *frame, Value val)
 {
 	size_t stack_offset = vm->stack.stack_top - vm->stack.values;
-	if (stack_offset >= STACK_MAX) {
+	if (stack_offset >= VM_STACK_MAX) {
 		runtime_error(vm, "vm stack overflow\n");
 		return false;
 	}

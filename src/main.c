@@ -1,6 +1,5 @@
 #include "include/amex.h"
 #include "debug.h"
-#include <stdlib.h>
 
 
 static void repl()

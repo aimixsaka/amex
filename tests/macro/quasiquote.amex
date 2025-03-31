@@ -3,3 +3,4 @@
 (def body '(+ x y))
 
 (print ~(def ,name (fn ,name ,args ,body)))
+# expect: (def sum (fn sum [x y] (+ x y)))

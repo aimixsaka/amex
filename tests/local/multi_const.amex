@@ -4,4 +4,4 @@
     (def a 11)
     (def b 22)
     1
-    (print (+ a b)))
+    (print (+ a b))) # expect: 33

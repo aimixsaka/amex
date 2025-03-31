@@ -4,4 +4,4 @@
                 inner))
 
 (def closure (outer))
-(print (closure))
+(print (closure)) # expect: "outer"

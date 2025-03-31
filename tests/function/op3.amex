@@ -1,0 +1,12 @@
+(def op3 (fn [op n]
+            (op 3 n)))
+
+
+(print "op3 + 2 :") # expect: "op3 + 2 :"
+(print (op3 + 2))   # expect: 5
+
+(print "op3 - 1 :") # expect: "op3 - 1 :"
+(print (op3 - 1))   # expect: 2
+
+(print "op3 * 8 :") # expect: "op3 * 8 :"
+(print (op3 * 8))   # expect: 24

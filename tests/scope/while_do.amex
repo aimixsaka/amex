@@ -6,3 +6,5 @@
       (def b 4)
       (print (+ a b)))
   (set i 0))
+
+# expect: 7

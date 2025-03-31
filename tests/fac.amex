@@ -3,4 +3,4 @@
                   1
                   (* n (fac (- n 1))))))
 
-(print (fac 90))
+(print (fac 90)) # expect: 1.48572e+138

@@ -6,5 +6,5 @@
 
 (def add1 (adder))
 
-(print (add1))
-(print (add1))
+(print (add1))  # expect: 2
+(print (add1))  # expect: 3

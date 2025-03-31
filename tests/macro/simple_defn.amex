@@ -4,4 +4,4 @@
 
 (defn plus [a b] (+ a b))
 
-(print (plus 3 4))
+(print (plus 3 4)) # expect: 7

@@ -1,0 +1,9 @@
+(print ((fn sum [a b]
+          (print (do
+              (def c 3)
+              (def d 4)
+              (+ c d)))
+          (+ a b)) 2 9))
+
+# expect: 7
+# expect: 11

@@ -29,15 +29,18 @@ $(BUILD_DIR)/%.c.o: %.c
 	mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-.PHONY: clean memcheck format
+.PHONY: clean memcheck format test
 clean:
-	rm -rf $(BUILD_DIR)/src
+	rm -rf $(BUILD_DIR)
 
 memcheck: $(BUILD_DIR)/$(TARGET_EXEC)
 	valgrind --leak-check=yes $(BUILD_DIR)/$(TARGET_EXEC)
 
 format:
 	@sed -i -E 's/[ \t]+$$//' $(SRC_DIRS)/*.h $(SRC_DIRS)/*.c
+
+test: $(BUILD_DIR)/$(TARGET_EXEC)
+	@./test.sh $(BUILD_DIR)/$(TARGET_EXEC)
 
 -include $(DEPS)
 

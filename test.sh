@@ -29,7 +29,7 @@ test_cases=$(find $(dirname $0)/tests -type f -name '*.amex')
 for test_case in ${test_cases[@]}; do
   info "Testing: $test_case..."
   expect="$(sed -nE 's/.*#.*expect: (.*)/\1/p' $test_case)"
-  got="$($target_exec $test_case)"
+  got="$($target_exec $test_case 2>&1)"
   if ! [ "$expect" = "$got" ]; then
     error "\nexpect:\n"
     error "$expect\n"

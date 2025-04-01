@@ -37,7 +37,6 @@ void free_vm(VM *vm)
 	free_vm_stack(vm);
 	free_objects(vm);
 	free_table(&vm->strings);
-	free_table(vm->globals);
 }
 
 /* TODO: use setjmp to reset state */

@@ -63,8 +63,7 @@ Buffer *new_buffer(VM *vm, uint32_t capacity)
 Array *new_array(VM *vm, uint32_t capacity)
 {
 	Array *array = ALLOCATE_OBJ(vm, Array, OBJ_ARRAY);
-	array->count = 0;
-	array->capacity = capacity;
+	init_array(array);
 	array->values = ALLOCATE(Value, capacity);
 	return array;
 }
@@ -72,8 +71,7 @@ Array *new_array(VM *vm, uint32_t capacity)
 Table *new_table(VM *vm,uint32_t capacity)
 {
 	Table *table = ALLOCATE_OBJ(vm, Table, OBJ_TABLE);
-	table->count = 0;
-	table->capacity = capacity;
+	init_table(table);
 	table->entries = ALLOCATE(Entry, capacity);
 	for (int i = 0; i < capacity; ++i) {
 		table->entries[i].key = NIL_VAL;

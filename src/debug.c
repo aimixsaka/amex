@@ -121,7 +121,7 @@ int disassemble_instruction(Chunk *chunk, int offset)
 		Function *f = AS_FUNCTION(v);
 		print_value(&v, "\n");
 		offset += 3;
-		for (int j = 0; j < f->upval_count; ++j) {
+		for (int j = 0; j < f->upval_count; j++) {
 			int is_local = chunk->code[offset++];
 			int index = chunk->code[offset++];
 			printf("%04d      |                     %s %d\n",

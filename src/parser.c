@@ -77,9 +77,9 @@ static bool read_as_num(const char *str, const char *end,
 	double acc = 0, exp = 1, place = 1;
 	if (*str == '-') {
 		sign = -1;
-		++str;
+		str++;
 	} else if (*str == '+') {
-		++str;
+		str++;
 	}
 
 	if (str >= end)
@@ -88,7 +88,7 @@ static bool read_as_num(const char *str, const char *end,
 		if (*str == '.' && !force_int) {
 			place = 0.1;
 		} else if (!force_int && (*str == 'e' || *str == 'E')) {
-			++str;
+			str++;
 			/* number after e/E should be a valid integer */
 			if (!read_as_num(str, end, &exp, true)) {
 				return false;
@@ -108,7 +108,7 @@ static bool read_as_num(const char *str, const char *end,
 				acc += x;
 			}
 		}
-		++str;
+		str++;
 	}
 	*n = acc * sign * exp;
 	return true;
@@ -135,7 +135,7 @@ static void parser_push(Parser *p, ParserType type)
 				      old_capacity, p->capacity);
 		p->parser_top = p->stack + stack_offset;
 	}
-	++p->parser_top;
+	p->parser_top++;
 	top = parser_peek(p);
 	if (!top) {
 		PERROR(p, "top is null ?");
@@ -170,7 +170,7 @@ static void parser_push(Parser *p, ParserType type)
 
 static ParseState *parser_pop(Parser *p)
 {
-	--p->parser_top;
+	p->parser_top--;
 	if (!p->parser_top) {
 		PERROR(p, "Parser stack underflow. (Pop)");
 		return NULL;
@@ -547,7 +547,7 @@ static int dispatch_char(Parser *p, const char c) {
 			break;
 		}
 	}
-	++p->index;
+	p->index++;
 	return !done;
 }
 

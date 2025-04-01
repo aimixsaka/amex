@@ -39,7 +39,7 @@ void print_value(Value *v, const char *sep)
 			break;
 		}
 		printf("%s", (v->type == TYPE_TUPLE) ? "(" : "[");
-		for (int i = 0; i < len - 1; ++i) {
+		for (int i = 0; i < len - 1; i++) {
 			print_value(&form->values[i], " ");
 		}
 		print_value(&form->values[len - 1], "");

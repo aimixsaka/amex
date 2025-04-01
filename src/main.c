@@ -41,7 +41,7 @@ static void repl()
 			unsigned i;
 			printf("\n");
 			printf("%s\n", buffer);
-			for (i = 0; i < p.index; ++i)
+			for (i = 0; i < p.index; i++)
 				printf(" ");
 			printf("^\n");
 			printf("\nParse error: %s\n", p.error);
@@ -126,7 +126,7 @@ static void run_file(const char *path)
 			// unsigned i;
 			// printf("\n");
 			// printf("%s\n", buffer);
-			// for (i = 0; i < p.index; ++i)
+			// for (i = 0; i < p.index; i++)
 			// 	printf(" ");
 			// printf("^\n");
 			// printf("\nParse error: %s\n", p.error);

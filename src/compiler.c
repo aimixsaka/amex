@@ -107,7 +107,7 @@ static void init_compiler(VM *vm, Compiler *c, FunctionType type, String *fname)
 	local->depth = 0;
 	local->flags = 0;
 	local->index = 0;
-	++c->constant_count;
+	c->constant_count++;
 	current = c;
 }
 
@@ -127,7 +127,7 @@ static int resolve_local(Compiler *c, String *name)
 {
 	int i;
 	Local *l;
-	for (i = c->local_count - 1; i >= 0; --i) {
+	for (i = c->local_count - 1; i >= 0; i--) {
 		l = &c->locals[i];
 		if (name == l->name) {
 			if (l->depth == -1) {
@@ -160,7 +160,7 @@ static int add_upvalue(Compiler *c, uint8_t index,
 {
 	int upval_count = c->function->upval_count;
 	/* return existing upvalue if found */
-	for (int i = 0; i < upval_count; ++i) {
+	for (int i = 0; i < upval_count; i++) {
 		Upval *upvalue = &c->upvals[i];
 		if (upvalue->index == index && upvalue->is_local == is_local)
 			return i;
@@ -194,12 +194,12 @@ static int resolve_upvalue(Compiler *c, String *name)
 
 static void begin_scope()
 {
-	++current->scope_depth;
+	current->scope_depth++;
 }
 
 static void end_scope(uint8_t n)
 {
-	--current->scope_depth;
+	current->scope_depth--;
 
 	while (current->local_count > 0 &&
 	       current->locals[current->local_count-1].depth >
@@ -214,7 +214,7 @@ static void end_scope(uint8_t n)
 			emit_byte(OP_CLOSE_UPVALUE);
 			emit_short((uint16_t)(current->locals[current->local_count - 1].index));
 		}
-		--current->local_count;
+		current->local_count--;
 	}
 	emit_bytes(OP_POPN, (uint8_t)n);
 }
@@ -227,7 +227,7 @@ static void end_scope(uint8_t n)
 static void declare_variable(String *v, uint8_t var_flags)
 {
 	/* find till initialized and lower depth local variable */
-	for (int i = current->local_count - 1; i >= 0; --i) {
+	for (int i = current->local_count - 1; i >= 0; i--) {
 		Local *local = &current->locals[i];
 		if (local->depth != -1 &&
 		    local->depth < current->scope_depth) {
@@ -301,13 +301,13 @@ static void quasiquote(Value x, int depth, int level, uint8_t flags)
 					compile_ast(elms[1], flags);
 					return;
 				} else {
-					--level;
+					level--;
 				}
 			} else if (strcmp(sym, "quasiquote") == 0) {
-				++level;
+				level++;
 			}
 		}
-		for (i = 0; i < len; ++i)
+		for (i = 0; i < len; i++)
 			quasiquote(elms[i], depth - 1, level, flags);
 		emit_bytes(OP_TUPLE, len);
 		break;
@@ -316,7 +316,7 @@ static void quasiquote(Value x, int depth, int level, uint8_t flags)
 		uint8_t len, i;
 		Array *arr = x.data.array;
 		len = arr->count;
-		for (i = 0; i < len; ++i)
+		for (i = 0; i < len; i++)
 			quasiquote(arr->values[i], depth - 1, level, flags);
 		emit_bytes(OP_ARRAY, len);
 		break;
@@ -449,7 +449,7 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 	emit_byte(OP_CLOSURE);
 	emit_short(add_constant(FUNCTION_VAL(f)));
 
-	for (int i = 0; i < f->upval_count; ++i) {
+	for (int i = 0; i < f->upval_count; i++) {
 		emit_byte(compiler.upvals[i].is_local ? 1 : 0);
 		emit_byte(compiler.upvals[i].index);
 	}
@@ -466,7 +466,7 @@ static void spe_def(uint8_t argn, const Value *argv, uint8_t flags)
 	}
 
 	uint8_t var_flags = 0;
-	for (int i = 1; i < argn - 1; ++i) {
+	for (int i = 1; i < argn - 1; i++) {
 		if (!IS_KEYWORD(argv[i]))
 			CERROR("variable attribute should be a keyword.\n");
 		if (strcmp(AS_CSTRING(argv[i]), "macro") == 0)
@@ -645,7 +645,7 @@ static void compile_symbol(String *name, bool get_op)
 
 static bool check_args(const Array *arr)
 {
-	for (int i = 0; i < arr->count; ++i)
+	for (int i = 0; i < arr->count; i++)
 		if (arr->values[i].type != TYPE_SYMBOL)
 			return false;
 	return true;
@@ -666,7 +666,7 @@ static void compile_args(const Array *arr,
 	if (arr->count == 0) {
 		return;
 	} else if (arr->count >= 1) {
-		for (int i = 0; i < arr->count; ++i) {
+		for (int i = 0; i < arr->count; i++) {
 			v = AS_STRING(arr->values[i]);
 			if (strcmp(v->chars, "&") == 0) {
 				if (i != arr->count - 2)
@@ -677,7 +677,7 @@ static void compile_args(const Array *arr,
 				continue;
 			}
 			declare_arg(v);
-			++current->constant_count;
+			current->constant_count++;
 		}
 		if (!has_vararg) {
 			*arity = arr->count;
@@ -694,12 +694,12 @@ static void compile_body(uint8_t elemn, const Value *elms, uint8_t flags)
 {
 	if (elemn == 0) {
 		emit_byte(OP_NIL);
-		++current->constant_count;
+		current->constant_count++;
 		return;
 	}
-	for (int i = 0; i < elemn; ++i) {
+	for (int i = 0; i < elemn; i++) {
 		compile_ast(elms[i], flags);
-		++current->constant_count;
+		current->constant_count++;
 	}
 }
 
@@ -748,7 +748,7 @@ static bool macroexpand1(Value x, Value *out,
 	emit_constant(CLOSURE_VAL(closure));
 	uint8_t argn = form->count - 1;
 	Value *argv = form->values + 1;
-	for (int i = 0; i < argn; ++i)
+	for (int i = 0; i < argn; i++)
 		emit_constant(argv[i]);
 	emit_bytes(OP_CALL, (uint8_t)argn);
 	Function *f = end_compiler();
@@ -776,13 +776,13 @@ static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 	switch (head.type) {
 	case TYPE_SYMBOL:
 		if (!get_special_fn(AS_CSTRING(head)))
-			++current->constant_count;
+			current->constant_count++;
 	case TYPE_TUPLE:
-		for (int i = 0; i < elemn; ++i) {
+		for (int i = 0; i < elemn; i++) {
 			compile_ast(elms[i], flags);
 		}
 		emit_bytes(OP_CALL, elemn - 1);
-		--current->constant_count;
+		current->constant_count--;
 		break;
 	default:
 		CERROR("expect a function call.\n");
@@ -791,7 +791,7 @@ static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 
 static void compile_array(uint8_t elemn, const Value *elms, uint8_t flags)
 {
-	for (int i = 0; i < elemn; ++i)
+	for (int i = 0; i < elemn; i++)
 		compile_ast(elms[i], flags);
 	emit_bytes(OP_ARRAY, elemn);
 }
@@ -806,7 +806,7 @@ static void compile_ast(Value ast, uint8_t flags)
 	/* we expand the macro first, then execute the expansion result */
 	uint8_t macroi = MAX_MACRO_EXPAND;
 	while (macroi && macroexpand1(ast, &ast, &sp_fn)) {
-		--macroi;
+		macroi--;
 	}
 	if (sp_fn) {
 		sp_fn->fn(ast.data.array->count - 1, ast.data.array->values + 1, flags);

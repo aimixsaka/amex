@@ -72,7 +72,7 @@ static bool push(VM *vm, CallFrame *frame, Value val)
 			frame->slots = vm->stack.values + slots_offset;
 	}
 	*(vm->stack.stack_top) = val;
-	++vm->stack.stack_top;
+	vm->stack.stack_top++;
 	return true;
 }
 
@@ -132,7 +132,7 @@ static bool call(VM *vm, Closure *closure, uint8_t argn)
 		x.type = TYPE_ARRAY;
 		uint8_t n = argn - min_arity;
 		x.data.array = new_array(vm, n);
-		for (int i = n - 1; i >= 0; --i)
+		for (int i = n - 1; i >= 0; i--)
 			write_array(x.data.array, peek(vm, i));
 		popn(vm, n);
 		if (!push(vm, frame, x))
@@ -251,7 +251,7 @@ do {									\
 		return IERROR;						\
 	}								\
 	res = AS_NUMBER(v1) op AS_NUMBER(v2);				\
-	for (i = n - 3; i >= 0; --i) {					\
+	for (i = n - 3; i >= 0; i--) {					\
 		v1 = peek(vm, i);					\
 		if (!IS_NUMBER(v1)) {					\
 			runtime_error(vm, "expected number val\n");	\
@@ -273,7 +273,7 @@ do {									\
 		runtime_error(vm, "expected number val\n");		\
 		return IERROR;						\
 	}								\
-	for (i = n - 1; i >= 0; --i) {					\
+	for (i = n - 1; i >= 0; i--) {					\
 		v2 = peek(vm, i);					\
 		if (!IS_NUMBER(v2)) {					\
 			runtime_error(vm, "expected number val.\n");	\
@@ -294,7 +294,7 @@ do {									\
 	Value v1, v2;							\
 	bool res = init_val;						\
 	v1 = peek(vm, n - 1);						\
-	for (i = n - 1; i >= 0; --i) {					\
+	for (i = n - 1; i >= 0; i--) {					\
 		v2 = peek(vm, i);					\
 		res = value_eq(v1, v2);					\
 		if (res != init_val)					\
@@ -347,7 +347,7 @@ do {									\
 			}
 			n += additional_spliced_argn;
 			x.data.array = new_array(vm, n);
-			for (int i = n - 1; i >= 0; --i)
+			for (int i = n - 1; i >= 0; i--)
 				write_array(x.data.array, peek(vm, i));
 			popn(vm, n);
 			PUSH(x);
@@ -366,7 +366,7 @@ do {									\
 			}
 			n += additional_spliced_argn;
 			x.data.array = new_array(vm, n);
-			for (int i = n - 1; i >= 0; --i)
+			for (int i = n - 1; i >= 0; i--)
 				write_array(x.data.array, peek(vm, i));
 			popn(vm, n);
 			PUSH(x);
@@ -378,7 +378,7 @@ do {									\
 			size_t sum_temp = additional_spliced_argn;
 			if (IS_TUPLE(v) || IS_ARRAY(v)) {
 				Array *arr = v.data.array;
-				for (int i = 0; i < arr->count; ++i)
+				for (int i = 0; i < arr->count; i++)
 					PUSH(arr->values[i]);
 				if ((sum_temp + arr->count - 1) >= UINT8_MAX) {
 					runtime_error(vm, "can't have more than 254 arguments.\n");
@@ -427,7 +427,7 @@ do {									\
 		case OP_GET_GLOBAL: {
 			// int n = frame->closure->function->chunk.constants.count;
 			// printf("**** constant array start: *****\n");
-			// for (int i = 0; i < n; ++i)
+			// for (int i = 0; i < n; i++)
 			// 	print_value(&frame->closure->function->chunk.constants.values[i], "\n");
 			// printf("**** constant array end: *****\n");
 			// printf("**** index: %d ****\n", (uint16_t)((frame->ip[0] << 8) | frame->ip[1]));
@@ -541,7 +541,7 @@ do {									\
 			Function *function = AS_FUNCTION(v);
 			Closure *closure = new_closure(vm, function);
 			PUSH(CLOSURE_VAL(closure));
-			for (int i = 0; i < closure->upvalue_count; ++i) {
+			for (int i = 0; i < closure->upvalue_count; i++) {
 				uint8_t is_local = READ_BYTE();
 				uint8_t index = READ_BYTE();
 				/* capture previous frame's local variable */
@@ -579,7 +579,7 @@ do {									\
 			Value ret_val = pop(vm);
 			/* first slot contains closure, so +1 */
 			close_upvalues(vm, frame->slots + 1);
-			--vm->frame_count;
+			vm->frame_count--;
 			if (vm->frame_count == 0) {
 				pop(vm); /* pop top level SCRIPT_TYPE function */
 				return IOK(ret_val);

@@ -73,7 +73,7 @@ Table *new_table(VM *vm,uint32_t capacity)
 	Table *table = ALLOCATE_OBJ(vm, Table, OBJ_TABLE);
 	init_table(table);
 	table->entries = ALLOCATE(Entry, capacity);
-	for (int i = 0; i < capacity; ++i) {
+	for (int i = 0; i < capacity; i++) {
 		table->entries[i].key = NIL_VAL;
 		table->entries[i].value = NIL_VAL;
 	}
@@ -104,7 +104,7 @@ Closure *new_closure(VM *vm, Function *function)
 {
 	Upvalue **upvalues = ALLOCATE(Upvalue*,
 				      function->upval_count);
-	for (int i = 0; i < function->upval_count; ++i)
+	for (int i = 0; i < function->upval_count; i++)
 		upvalues[i] = NULL;
 	Closure *closure = ALLOCATE_OBJ(vm, Closure, OBJ_CLOSURE);
 	closure->function = function;

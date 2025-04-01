@@ -793,6 +793,7 @@ static void compile_array(uint8_t elemn, const Value *elms, uint8_t flags)
 {
 	for (int i = 0; i < elemn; ++i)
 		compile_ast(elms[i], flags);
+	emit_bytes(OP_ARRAY, elemn);
 }
 
 static void compile_ast(Value ast, uint8_t flags)

@@ -101,12 +101,19 @@ static bool is_falsey(Value value)
 static bool call(VM *vm, Closure *closure, uint8_t argn)
 {
 	int f_arity = closure->function->arity;
-	if (f_arity != -1 && argn != f_arity) {
+	int min_arity = closure->function->min_arity;
+	if (f_arity >= 0 && min_arity >= 0 &&
+			argn != f_arity) {
 		runtime_error(vm, "expected %d arguments but got %d\n",
-			      closure->function->arity, argn);
+			      f_arity, argn);
 		return false;
 	}
-
+	if (f_arity == -1 && min_arity > 0 &&
+			min_arity > argn) {
+		runtime_error(vm, "expected at least %d arguments but got %d\n",
+			      min_arity, argn);
+		return false;
+	}
 	if (vm->frame_count >= FRAMES_MAX) {
 		runtime_error(vm, "stack overflow\n");
 		return false;
@@ -116,6 +123,23 @@ static bool call(VM *vm, Closure *closure, uint8_t argn)
 	frame->closure = closure;
 	frame->ip = closure->function->chunk.code;
 	frame->slots = vm->stack.stack_top - argn - 1;
+
+	if (f_arity == -1 && min_arity > 0) {
+		/*
+		* FIXME: really hacky way to change argument constants at runtime,
+		* maybe we can use global variables table to handle this at compile time.
+		*/
+		Value x;
+		x.type = TYPE_ARRAY;
+		uint8_t n = argn - min_arity;
+		x.data.array = new_array(vm, n);
+		for (int i = n - 1; i >= 0; --i)
+			write_array(x.data.array, peek(vm, i));
+		popn(vm, n);
+		if (!push(vm, frame, x))
+			return false;
+	}
+
 	return true;
 }
 
@@ -317,22 +341,37 @@ do {									\
 			Value x;
 			x.type = TYPE_TUPLE;
 			uint8_t n = READ_BYTE();
-			x.data.array = new_array(vm, n + 1);
+			size_t sum_temp = n;
+			if (sum_temp + additional_spliced_argn >= UINT8_MAX) {
+				runtime_error(vm, "can't have more than 254 arguments.\n");
+				return IERROR;
+			}
+			n += additional_spliced_argn;
+			x.data.array = new_array(vm, n);
 			for (int i = n - 1; i >= 0; --i)
 				write_array(x.data.array, peek(vm, i));
 			popn(vm, n);
 			PUSH(x);
+			/* clear additional_spliced_argn */
+			additional_spliced_argn = 0;
 			break;
 		}
 		case OP_ARRAY: {
 			Value x;
 			x.type = TYPE_ARRAY;
 			uint8_t n = READ_BYTE();
-			x.data.array = new_array(vm, n + 1);
+			size_t sum_temp = n;
+			if (sum_temp + additional_spliced_argn >= UINT8_MAX) {
+				runtime_error(vm, "can't have more than 254 arguments.\n");
+				return IERROR;
+			}
+			n += additional_spliced_argn;
+			x.data.array = new_array(vm, n);
 			for (int i = n - 1; i >= 0; --i)
 				write_array(x.data.array, peek(vm, i));
 			popn(vm, n);
 			PUSH(x);
+			additional_spliced_argn = 0;
 			break;
 		}
 		case OP_SPLICE: {

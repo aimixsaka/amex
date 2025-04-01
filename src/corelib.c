@@ -6,6 +6,7 @@ static Closure *op_function(VM *vm, String *name, OpCode op)
 	f->name = name;
 	/* we will peek argument number at runtime */
 	f->arity = -1;
+	f->min_arity = -1;
 	write_chunk(&f->chunk, op);
 	write_chunk(&f->chunk, OP_RETURN);
 

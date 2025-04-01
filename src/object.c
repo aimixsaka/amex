@@ -87,6 +87,7 @@ Function *new_function(VM *vm)
 	Function *f = ALLOCATE_OBJ(vm, Function, OBJ_FUNCTION);
 	f->name = NULL;
 	f->arity = 0;
+	f->min_arity = 0;
 	f->upval_count = 0;
 	init_chunk(&f->chunk);
 	return f;

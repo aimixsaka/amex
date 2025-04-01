@@ -316,6 +316,7 @@ typedef enum {
 /* TODO: variable length parameters */
 struct Function {
 	GCObject		gc;
+	int			min_arity;
 	int			arity;
 	int			upval_count;
 	Chunk			chunk;

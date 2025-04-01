@@ -118,7 +118,7 @@ static Function *end_compiler()
 	/* restore previous compiler */
 	current = current->enclosing;
 #ifdef DEBUG_PRINT_CODE
-		disassemble_chunk(&f->chunk, f->name ? f->name->chars : "<script>");
+	disassemble_chunk(&f->chunk, f->name ? f->name->chars : "<script>");
 #endif /* DEBUG_PRINT_CODE */
 	return f;
 }
@@ -265,7 +265,7 @@ static void declare_arg(String *name)
 static bool check_args(const Array *arr);
 static void compile_ast(Value ast, uint8_t flags);
 static void compile_symbol(String *name, bool get_op);
-static void compile_args(const Array *arr);
+static void compile_args(const Array *arr, int *min_arity, int *arity);
 static void compile_body(uint8_t elmn, const Value *elms, uint8_t flags);
 static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags);
 
@@ -382,12 +382,17 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 		case TYPE_SYMBOL:
 			CERROR("expect function parameters.\n");
 		case TYPE_ARRAY:
-			init_compiler(current->vm, &compiler, FUNCTION_TYPE, NULL);
 			args = AS_ARRAY(head);
 			if (args->count >= UINT8_MAX)
 				CERROR("can't have more than 255 parameters.\n");
 			check_args(args);
-			compiler.function->arity = args->count;
+			init_compiler(current->vm, &compiler, FUNCTION_TYPE, NULL);
+			int min_arity;
+			int arity;
+			compile_args(args, &min_arity, &arity);
+			begin_scope();
+			compiler.function->min_arity = min_arity;
+			compiler.function->arity = arity;
 			emit_byte(OP_NIL); /* return value */
 			break;
 		default:
@@ -395,7 +400,7 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 		}
 	} else if (argn >= 2) {
 		switch (head.type) {
-		case TYPE_ARRAY:	/* (fn [a b] (+ a b) ...) */
+		case TYPE_ARRAY: {	/* (fn [a b] (+ a b) ...) */
 			args = AS_ARRAY(head);
 			if (args->count >= UINT8_MAX)
 				CERROR("can't have more than 255 parameters.\n");
@@ -403,12 +408,16 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 				CERROR("function parameter should be a symbol.\n");
 			}
 			init_compiler(current->vm, &compiler, FUNCTION_TYPE, NULL);
-			compile_args(args);
+			int min_arity;
+			int arity;
+			compile_args(args, &min_arity, &arity);
 			begin_scope();
-			compiler.function->arity = args->count;
+			compiler.function->min_arity = min_arity;
+			compiler.function->arity = arity;
 			compile_body(argn - 1, argv + 1, flags);
 			break;
-		case TYPE_SYMBOL:	/* (fn fname [a b] (+ a b) ...) */
+		}
+		case TYPE_SYMBOL: {	/* (fn fname [a b] (+ a b) ...) */
 			if (argv[1].type != TYPE_ARRAY) {
 				CERROR("expect function parameters.\n");
 			}
@@ -421,11 +430,15 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 			}
 			init_compiler(current->vm, &compiler, FUNCTION_TYPE, fname);
 			/* arguments and function name should be in scope 0 */
-			compile_args(args);
+			int min_arity;
+			int arity;
+			compile_args(args, &min_arity, &arity);
 			begin_scope();
-			compiler.function->arity = args->count;
+			compiler.function->min_arity = min_arity;
+			compiler.function->arity = arity;
 			compile_body(argn - 2, argv + 2, flags);
 			break;
+		}
 		default:
 			CERROR("epxect function name or function parameters.\n");
 		}
@@ -638,14 +651,42 @@ static bool check_args(const Array *arr)
 	return true;
 }
 
-static void compile_args(const Array *arr)
+/*
+ * arity == -1, min_arity = -1		op_function
+ * arity == min_arity >= 0		normal function
+ * arity == -1, min_arity > 0		variable arguments function
+ */
+static void compile_args(const Array *arr,
+			 int *min_arity, int *arity)
 {
-	check_args(arr);
 	String *v;
-	for (int i = 0; i < arr->count; ++i) {
-		v = AS_STRING(arr->values[i]);
-		declare_arg(v);
-		++current->constant_count;
+	*min_arity = 0;
+	*arity = 0;
+	bool has_vararg = false;
+	if (arr->count == 0) {
+		return;
+	} else if (arr->count >= 1) {
+		for (int i = 0; i < arr->count; ++i) {
+			v = AS_STRING(arr->values[i]);
+			if (strcmp(v->chars, "&") == 0) {
+				if (i != arr->count - 2)
+					CERROR("& in unexpected location");
+				*min_arity = i;
+				*arity = -1;
+				has_vararg = true;
+				continue;
+			}
+			declare_arg(v);
+			++current->constant_count;
+		}
+		if (!has_vararg) {
+			*arity = arr->count;
+			*min_arity = arr->count;
+		}
+	} else {
+		CERROR("compiler internal error: "
+		       "compile_args: unexpected argument number: %d",
+		       arr->count);
 	}
 }
 

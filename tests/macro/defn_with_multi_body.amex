@@ -1,0 +1,12 @@
+(def defn :macro
+  (fn [name args & body]
+      ~(def ,name (fn ,name ,args ,;body))))
+
+(defn p2 [a b]
+  (print a)
+  (print b))
+
+(p2 5 9)
+
+# expect: 5
+# expect: 9

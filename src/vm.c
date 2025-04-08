@@ -607,6 +607,8 @@ do {									\
 
 InterpretResult interpret(VM *vm, Function *f)
 {
+	/* reset stack before each interpret */
+	reset_stack(vm);
 	Closure *closure = new_closure(vm, f);
 	push(vm, NULL, CLOSURE_VAL(closure));
 	call(vm, closure, 0);

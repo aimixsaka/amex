@@ -505,12 +505,13 @@ struct VM {
 	/* current hight of the CallFrame stack */
 	uint32_t		frame_count;
 
-	/* We use a stack based VM */
-	struct Stack {
-		uint32_t	count;
-		uint32_t	capacity;
-		Value		*values;
-		Value		*stack_top;
+	/*
+	 * FIXME: kind of memory waste,
+	 * but see note in push(...) function.
+	 */
+	struct {
+		Value			values[VM_STACK_MAX];
+		Value*			stack_top;
 	} stack;
 	Upvalue			*open_upvalues;
 	Table			*globals;	/* global variables */
@@ -534,7 +535,7 @@ typedef struct {
 } InterpretResult;
 
 
-bool push(VM *vm, CallFrame *frame, Value val);
+bool push(VM *vm, Value val);
 Value pop(VM *vm);
 Value popn(VM *vm, int n);
 void init_vm(VM *vm);

@@ -1,12 +1,11 @@
 #include "include/amex.h"
-#include <stdio.h>
 
 static Closure *op_function(VM *vm, String *name, OpCode op)
 {
 	Function *f = new_function(vm);
 	
 	/* HACK: GC GUARD */
-	push(vm, NULL, FUNCTION_VAL(f));
+	push(vm, FUNCTION_VAL(f));
 	
 	f->name = name;
 	/* we will peek argument number at runtime */
@@ -24,17 +23,17 @@ Table *core_env(VM *vm, Table *replacement)
 	Table *env = (replacement == NULL) ?
 		new_table(vm, 12) : replacement;
 	/* HACK: GC GUARD */
-	push(vm, NULL, TABLE_VAL(env));
+	push(vm, TABLE_VAL(env));
 #define SET_ENTRY(name, op)						\
 do {									\
 	String *s = copy_string(vm, name, strlen(name));		\
 	/* HACK: GC GUARD */						\
-	push(vm, NULL, STRING_VAL(s));					\
+	push(vm, STRING_VAL(s));					\
 	Array *fv_pair = new_array(vm, 2);				\
-	push(vm, NULL, ARRAY_VAL(fv_pair));				\
+	push(vm, ARRAY_VAL(fv_pair));				\
 	write_array(vm, fv_pair, NUMBER_VAL(0));			\
 	Value closure = CLOSURE_VAL(op_function(vm, s, op));		\
-	push(vm, NULL, closure);					\
+	push(vm, closure);					\
 	write_array(vm, fv_pair, closure);				\
 	table_set(							\
 		vm,							\

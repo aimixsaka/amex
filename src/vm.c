@@ -15,8 +15,6 @@ static void reset_stack(VM *vm)
 
 void init_vm(VM *vm)
 {
-	vm->stack.capacity = 0;
-	vm->stack.values = NULL;
 	reset_stack(vm);
 	vm->objects = NULL;
 	vm->bytes_allocated = 0;
@@ -33,19 +31,8 @@ void set_vm_globals(VM *vm, Table *env)
 	vm->globals = env;
 }
 
-/*
- * NOTE:
- * use free instead of FREE_ARRAY here for
- * same reason of push.
- */
-static void free_vm_stack(VM *vm)
-{
-	free(vm->stack.values);
-}
-
 void free_vm(VM *vm)
 {
-	free_vm_stack(vm);
 	free_objects(vm);
 	free_table(vm, &vm->strings);
 }
@@ -64,34 +51,22 @@ static void runtime_error(VM *vm, const char *format, ...)
 
 /*
  * NOTE:
- * we use realloc instead of GROW_ARRAY here
+ * we use fixed size array instead of
+ * realloc or GROW_ARRAY here,
  * because we use push() to guard a Value from GC sweep,
  * which means push itself can not use reallocate function
  * to grow capacity, as reallocate will trigger GC...
+ * and for realloc, it's hard to update frame slots when
+ * trigger a push that doesn't kown the current frame...
  */
-bool push(VM *vm, CallFrame *frame, Value val)
+bool push(VM *vm, Value val)
 {
-	size_t stack_offset = vm->stack.stack_top - vm->stack.values;
-	if (stack_offset >= VM_STACK_MAX) {
+	int stack_offset = vm->stack.stack_top - vm->stack.values;
+	if (stack_offset >= VM_STACK_MAX || stack_offset < 0) {
 		runtime_error(vm, "vm stack overflow\n");
 		return false;
 	}
-	if (vm->stack.capacity < stack_offset + 1) {
-		size_t slots_offset;
-		int old_capacity = vm->stack.capacity;
-		if (frame)
-			slots_offset = frame->slots - vm->stack.values;
-		vm->stack.capacity = GROW_CAPACITY(old_capacity);
-		void *result = realloc(vm->stack.values,
-				       sizeof(Value) * (vm->stack.capacity));
-		if (result == NULL)
-			exit(2);
-		vm->stack.values = (Value*)result;
-		vm->stack.stack_top = vm->stack.values + stack_offset;
-		/* synchronize frame slots to new allocated vm stack */
-		if (frame)
-			frame->slots = vm->stack.values + slots_offset;
-	}
+
 	*(vm->stack.stack_top) = val;
 	vm->stack.stack_top++;
 	return true;
@@ -156,7 +131,7 @@ static bool call(VM *vm, Closure *closure, uint8_t argn)
 		for (int i = n - 1; i >= 0; i--)
 			write_array(vm, x.data.array, peek(vm, i));
 		popn(vm, n);
-		if (!push(vm, frame, x))
+		if (!push(vm, x))
 			return false;
 	}
 
@@ -243,7 +218,7 @@ static InterpretResult run(VM *vm)
 
 #define PUSH(v)				\
 do {					\
-	if (!push(vm, frame, v))	\
+	if (!push(vm, v))		\
 		return IERROR;		\
 } while (0)
 
@@ -630,13 +605,13 @@ InterpretResult interpret(VM *vm, Function *f)
 	reset_stack(vm);
 	
 	/* HACK: GC GUARD */
-	push(vm, NULL, FUNCTION_VAL(f));
+	push(vm, FUNCTION_VAL(f));
 	
 	Closure *closure = new_closure(vm, f);
 	
 	pop(vm);
 	
-	push(vm, NULL, CLOSURE_VAL(closure));
+	push(vm, CLOSURE_VAL(closure));
 	call(vm, closure, 0);
 
 	return run(vm);

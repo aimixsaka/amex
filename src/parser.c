@@ -30,13 +30,13 @@ static void mark_parse_states(Parser *p, int count)
 			break;
 		case PTYPE_ARRAY:
 		case PTYPE_TUPLE:
-			push(p->vm, NULL, ARRAY_VAL(state->buf.array));
+			push(p->vm, ARRAY_VAL(state->buf.array));
 			break;
 		case PTYPE_TABLE:
-			push(p->vm, NULL, TABLE_VAL(state->buf.table_state.table));
+			push(p->vm, TABLE_VAL(state->buf.table_state.table));
 			break;
 		case PTYPE_SPECIAL_FORM:
-			push(p->vm, NULL, ARRAY_VAL(state->buf.array));
+			push(p->vm, ARRAY_VAL(state->buf.array));
 			break;
 		}
         }
@@ -259,7 +259,7 @@ static void parser_top_append(Parser *p, Value x)
 	/* HACK: GC GUARD */
 	int count = p->parser_top - p->stack;
 	mark_parse_states(p, count);
-	push(p->vm, NULL, x);
+	push(p->vm, x);
 	
 	switch (top->type) {
 	case PTYPE_ROOT:
@@ -318,7 +318,8 @@ static Value buf_build_token(Parser *p, Buffer *buf, bool is_keyword)
 	const char *end = buf->data + len;
 
 	/* HACK: GC GUARD */
-	mark_parse_states(p, p->parser_top - p->stack);
+	int count = p->parser_top - p->stack;
+	mark_parse_states(p, count);
 	
 	if (is_keyword) {
 		x.type = TYPE_KEYWORD;
@@ -345,7 +346,7 @@ static Value buf_build_token(Parser *p, Buffer *buf, bool is_keyword)
 		}
 	}
 	
-	unmark_parse_states(p, p->parser_top - p->stack);
+	unmark_parse_states(p, count);
 	
 	return x;
 }
@@ -387,7 +388,8 @@ static int main_state(Parser *p, char c)
 		Array *quote_pair = top->buf.array;
 		
 		/* HACK: GC GUARD */
-		mark_parse_states(p, p->parser_top - p->stack);
+		int count = p->parser_top - p->stack;
+		mark_parse_states(p, count);
 		
 		switch (c) {
 		case '\'':	/* quote */
@@ -406,7 +408,7 @@ static int main_state(Parser *p, char c)
 		v.data.string = qs;
 		write_array(p->vm, quote_pair, v);
 
-		unmark_parse_states(p, p->parser_top - p->stack);
+		unmark_parse_states(p, count);
 
 		return 1;
 	}

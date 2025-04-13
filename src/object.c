@@ -29,7 +29,7 @@ static String *allocate_string(VM *vm, char *chars,
 	s->hash = hash;
 	
 	/* HACK: GC GUARD */					
-	push(vm, NULL, STRING_VAL(s));
+	push(vm, STRING_VAL(s));
 	
 	/* intern string if not in table */
 	table_set(vm, &vm->strings, STRING_VAL(s), NIL_VAL);
@@ -77,7 +77,7 @@ Array *new_array(VM *vm, uint32_t capacity)
 	Array *array = ALLOCATE_OBJ(vm, Array, OBJ_ARRAY);
 	
 	/* HACK: GC GUARD */
-	push(vm, NULL, ARRAY_VAL(array));
+	push(vm, ARRAY_VAL(array));
 	
 	init_array(array);
 	array->capacity = capacity;
@@ -92,7 +92,7 @@ Table *new_table(VM *vm, uint32_t capacity)
 	Table *table = ALLOCATE_OBJ(vm, Table, OBJ_TABLE);
 	
 	/* HACK: GC GUARD */
-	push(vm, NULL, TABLE_VAL(table));
+	push(vm, TABLE_VAL(table));
 	
 	init_table(table);
 	table->entries = ALLOCATE(vm, Entry, capacity);

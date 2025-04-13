@@ -46,7 +46,7 @@ static int add_constant(const Value constant)
 	}
 	
 	/* HACK: GC GUARD */ 
-	push(current->vm, NULL, constant);
+	push(current->vm, constant);
 	
 	write_array(current->vm, &current_chunk()->constants, constant);
 	
@@ -67,14 +67,14 @@ static void emit_constant(const Value constant)
 static void define_global(String *name, uint8_t var_flags)
 {
 	/* HACK: GC GUARD */
-	push(current->vm, NULL, STRING_VAL(name));
+	push(current->vm, STRING_VAL(name));
 	
 	Array *fv_pair = new_array(current->vm, 2);
 	write_array(current->vm, fv_pair, NUMBER_VAL(var_flags));
 	write_array(current->vm, fv_pair, NIL_VAL);
 	Value var = STRING_VAL(name);
 	
-	push(current->vm, NULL, ARRAY_VAL(fv_pair));
+	push(current->vm, ARRAY_VAL(fv_pair));
 
 	/* pre variable set for macro */
 	table_set(current->vm, current->vm->globals,
@@ -464,7 +464,7 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 	f = end_compiler();
 
 	/* HACK: GC GUARD */
-	push(current->vm, NULL, FUNCTION_VAL(f));
+	push(current->vm, FUNCTION_VAL(f));
 
 	emit_byte(OP_CLOSURE);
 	emit_short(add_constant(FUNCTION_VAL(f)));
@@ -830,6 +830,10 @@ static void compile_ast(Value ast, uint8_t flags)
 	while (macroi && macroexpand1(ast, &ast, &sp_fn)) {
 		macroi--;
 	}
+
+	/* HACK: GC GUARD */
+	push(current->vm, ast);
+
 	if (sp_fn) {
 		sp_fn->fn(ast.data.array->count - 1, ast.data.array->values + 1, flags);
 	} else {
@@ -853,14 +857,20 @@ static void compile_ast(Value ast, uint8_t flags)
 		case TYPE_FUNCTION:
                 case TYPE_CLOSURE:
                 case TYPE_NATIVE:
+			pop(current->vm);
+
 			CERROR("unexpected function type in compile_ast.\n");
                 /* TODO: implement table compiling */
                 case TYPE_TABLE:
+			pop(current->vm);
+
 			CERROR("compile table: unimplemented.\n");
                 default:
                         emit_constant(ast);
 		}
 	}
+
+	pop(current->vm);
 }
 
 void mark_compiler_roots(VM *vm)
@@ -875,7 +885,7 @@ void mark_compiler_roots(VM *vm)
 Function *compile(VM *vm, Value ast)
 {
 	/* HAKC: GC GUARD */
-	push(vm, NULL, ast);
+	push(vm, ast);
 	
 	/* TODO: use normal control flow, other than setjmp */
 	Compiler compiler;

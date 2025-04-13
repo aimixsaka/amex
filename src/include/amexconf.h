@@ -26,8 +26,8 @@
 
 /* ---------- VM related --------- */
 /* max call depth */
-#define FRAMES_MAX			1024
-#define VM_STACK_MAX			4096
+#define FRAMES_MAX			64
+#define VM_STACK_MAX			(FRAMES_MAX * UINT8_COUNT)
 
 /* ---------- GC related --------- */
 #define GC_INIT_SIZE			1024 * 1024

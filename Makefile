@@ -15,6 +15,9 @@ CFLAGS := -MMD -std=c99 -Wall
 ifdef DEBUG
 	CFLAGS += -g -O0 -DDEBUG
 	TARGET_EXEC = amex-debug
+else ifdef DEBUG_GC
+	CFLAGS += -g -O0 -DDEBUG_GC
+	TARGET_EXEC = amex-debug-gc
 else ifdef RELEASE
 	CFLAGS += -O2
 else

@@ -19,6 +19,12 @@ void init_vm(VM *vm)
 	vm->stack.values = NULL;
 	reset_stack(vm);
 	vm->objects = NULL;
+	vm->bytes_allocated = 0;
+	vm->next_GC = GC_INIT_SIZE;
+	vm->gray_count = 0;
+	vm->gray_capacity = 0;
+	vm->gray_stack = NULL;
+	vm->globals = NULL;
 	init_table(&vm->strings);
 }
 
@@ -27,16 +33,21 @@ void set_vm_globals(VM *vm, Table *env)
 	vm->globals = env;
 }
 
+/*
+ * NOTE:
+ * use free instead of FREE_ARRAY here for
+ * same reason of push.
+ */
 static void free_vm_stack(VM *vm)
 {
-	FREE_ARRAY(Value, vm->stack.values, vm->stack.capacity);
+	free(vm->stack.values);
 }
 
 void free_vm(VM *vm)
 {
 	free_vm_stack(vm);
 	free_objects(vm);
-	free_table(&vm->strings);
+	free_table(vm, &vm->strings);
 }
 
 /* TODO: use setjmp to reset state */
@@ -51,7 +62,14 @@ static void runtime_error(VM *vm, const char *format, ...)
 	reset_stack(vm);
 }
 
-static bool push(VM *vm, CallFrame *frame, Value val)
+/*
+ * NOTE:
+ * we use realloc instead of GROW_ARRAY here
+ * because we use push() to guard a Value from GC sweep,
+ * which means push itself can not use reallocate function
+ * to grow capacity, as reallocate will trigger GC...
+ */
+bool push(VM *vm, CallFrame *frame, Value val)
 {
 	size_t stack_offset = vm->stack.stack_top - vm->stack.values;
 	if (stack_offset >= VM_STACK_MAX) {
@@ -64,8 +82,11 @@ static bool push(VM *vm, CallFrame *frame, Value val)
 		if (frame)
 			slots_offset = frame->slots - vm->stack.values;
 		vm->stack.capacity = GROW_CAPACITY(old_capacity);
-		vm->stack.values = GROW_ARRAY(Value, vm->stack.values,
-					     old_capacity, vm->stack.capacity);
+		void *result = realloc(vm->stack.values,
+				       sizeof(Value) * (vm->stack.capacity));
+		if (result == NULL)
+			exit(2);
+		vm->stack.values = (Value*)result;
 		vm->stack.stack_top = vm->stack.values + stack_offset;
 		/* synchronize frame slots to new allocated vm stack */
 		if (frame)
@@ -76,13 +97,13 @@ static bool push(VM *vm, CallFrame *frame, Value val)
 	return true;
 }
 
-static Value popn(VM *vm, int n)
+Value popn(VM *vm, int n)
 {
 	vm->stack.stack_top -= n;
 	return *vm->stack.stack_top;
 }
 
-static Value pop(VM *vm)
+Value pop(VM *vm)
 {
 	return popn(vm, 1);
 }
@@ -133,7 +154,7 @@ static bool call(VM *vm, Closure *closure, uint8_t argn)
 		uint8_t n = argn - min_arity;
 		x.data.array = new_array(vm, n);
 		for (int i = n - 1; i >= 0; i--)
-			write_array(x.data.array, peek(vm, i));
+			write_array(vm, x.data.array, peek(vm, i));
 		popn(vm, n);
 		if (!push(vm, frame, x))
 			return false;
@@ -147,7 +168,6 @@ static bool call_value(VM *vm, Value callable, uint8_t argn)
 	switch (callable.type) {
 	case TYPE_CLOSURE:
 		return call(vm, AS_CLOSURE(callable), argn);
-		break;
 	case TYPE_NATIVE:
 		break;
 	default:
@@ -348,7 +368,7 @@ do {									\
 			n += additional_spliced_argn;
 			x.data.array = new_array(vm, n);
 			for (int i = n - 1; i >= 0; i--)
-				write_array(x.data.array, peek(vm, i));
+				write_array(vm, x.data.array, peek(vm, i));
 			popn(vm, n);
 			PUSH(x);
 			/* clear additional_spliced_argn */
@@ -367,7 +387,7 @@ do {									\
 			n += additional_spliced_argn;
 			x.data.array = new_array(vm, n);
 			for (int i = n - 1; i >= 0; i--)
-				write_array(x.data.array, peek(vm, i));
+				write_array(vm, x.data.array, peek(vm, i));
 			popn(vm, n);
 			PUSH(x);
 			additional_spliced_argn = 0;
@@ -450,7 +470,7 @@ do {									\
 			}
 			Array *fv_pair = AS_ARRAY(v);
 			fv_pair->values[1] = peek(vm, 0);
-			table_set(vm->globals, k, ARRAY_VAL(fv_pair));
+			table_set(vm, vm->globals, k, ARRAY_VAL(fv_pair));
 			break;
 		}
 		case OP_SET_GLOBAL: {
@@ -462,7 +482,7 @@ do {									\
 			}
 			Array *fv_pair = AS_ARRAY(v);
 			fv_pair->values[1] = peek(vm, 0);
-			table_set(vm->globals, k, ARRAY_VAL(fv_pair));
+			table_set(vm, vm->globals, k, ARRAY_VAL(fv_pair));
 			break;
 		}
 		case OP_JUMP_IF_FALSE: {
@@ -609,7 +629,14 @@ InterpretResult interpret(VM *vm, Function *f)
 {
 	/* reset stack before each interpret */
 	reset_stack(vm);
+	
+	/* HACK: GC GUARD */
+	push(vm, NULL, FUNCTION_VAL(f));
+	
 	Closure *closure = new_closure(vm, f);
+	
+	pop(vm);
+	
 	push(vm, NULL, CLOSURE_VAL(closure));
 	call(vm, closure, 0);
 

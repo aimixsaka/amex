@@ -31,12 +31,12 @@ static inline Chunk *current_chunk()
 
 static void emit_byte(uint8_t byte)
 {
-	write_chunk(current_chunk(), byte);
+	write_chunk(current->vm, current_chunk(), byte);
 }
 
 static void emit_short(uint16_t num)
 {
-	write_short(current_chunk(), num);
+	write_short(current->vm, current_chunk(), num);
 }
 
 static int add_constant(const Value constant)
@@ -44,7 +44,14 @@ static int add_constant(const Value constant)
 	if (current_chunk()->constants.count >= UINT16_MAX - 1) {
 		CERROR("too many constants in function.\n");
 	}
-	write_array(&current_chunk()->constants, constant);
+	
+	/* HACK: GC GUARD */ 
+	push(current->vm, NULL, constant);
+	
+	write_array(current->vm, &current_chunk()->constants, constant);
+	
+	pop(current->vm);
+	
 	return current_chunk()->constants.count - 1;
 }
 
@@ -59,16 +66,25 @@ static void emit_constant(const Value constant)
 
 static void define_global(String *name, uint8_t var_flags)
 {
+	/* HACK: GC GUARD */
+	push(current->vm, NULL, STRING_VAL(name));
+	
 	Array *fv_pair = new_array(current->vm, 2);
-	write_array(fv_pair, NUMBER_VAL(var_flags));
-	write_array(fv_pair, NIL_VAL);
+	write_array(current->vm, fv_pair, NUMBER_VAL(var_flags));
+	write_array(current->vm, fv_pair, NIL_VAL);
 	Value var = STRING_VAL(name);
+	
+	push(current->vm, NULL, ARRAY_VAL(fv_pair));
+
 	/* pre variable set for macro */
-	table_set(current->vm->globals, var, ARRAY_VAL(fv_pair));
+	table_set(current->vm, current->vm->globals,
+		  var, ARRAY_VAL(fv_pair));
 
 	int index = add_constant(var);
 	emit_byte(OP_DEFINE_GLOBAL);
 	emit_short((uint16_t)index);
+
+	popn(current->vm, 2);
 }
 
 static void emit_global(const Value constant, bool set_op)
@@ -85,8 +101,8 @@ static void emit_global(const Value constant, bool set_op)
 
 static void emit_bytes(uint8_t byte1, uint8_t byte2)
 {
-	write_chunk(current_chunk(), byte1);
-	write_chunk(current_chunk(), byte2);
+	write_chunk(current->vm, current_chunk(), byte1);
+	write_chunk(current->vm, current_chunk(), byte2);
 }
 
 static void init_compiler(VM *vm, Compiler *c, FunctionType type, String *fname)
@@ -446,8 +462,14 @@ static void spe_fn(uint8_t argn, const Value *argv, uint8_t flags)
 		CERROR("compiler internal error, unexpected argument number!\n");
 	}
 	f = end_compiler();
+
+	/* HACK: GC GUARD */
+	push(current->vm, NULL, FUNCTION_VAL(f));
+
 	emit_byte(OP_CLOSURE);
 	emit_short(add_constant(FUNCTION_VAL(f)));
+
+	pop(current->vm);
 
 	for (int i = 0; i < f->upval_count; i++) {
 		emit_byte(compiler.upvals[i].is_local ? 1 : 0);
@@ -841,9 +863,21 @@ static void compile_ast(Value ast, uint8_t flags)
 	}
 }
 
+void mark_compiler_roots(VM *vm)
+{
+	Compiler *c = current;
+	while (c != NULL) {
+		mark_object(vm, (GCObject*)c->function);
+		c = c->enclosing;
+	}
+}
+
 Function *compile(VM *vm, Value ast)
 {
-	/* TODO: free memory ? */
+	/* HAKC: GC GUARD */
+	push(vm, NULL, ast);
+	
+	/* TODO: use normal control flow, other than setjmp */
 	Compiler compiler;
 	if (setjmp(on_error)) {
 		current = NULL;
@@ -851,5 +885,8 @@ Function *compile(VM *vm, Value ast)
 	}
 	init_compiler(vm, &compiler, SCRIPT_TYPE, NULL);
 	compile_ast(ast, 0);
+
+	pop(vm);
+	
 	return end_compiler();
 }

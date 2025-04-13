@@ -33,9 +33,9 @@ static uint32_t key_hash(Value k)
 	return hash;
 }
 
-void free_table(Table *table)
+void free_table(VM *vm, Table *table)
 {
-	FREE_ARRAY(Entry, table->entries, table->capacity);
+	FREE_ARRAY(vm, Entry, table->entries, table->capacity);
 	init_table(table);
 }
 
@@ -81,9 +81,9 @@ bool table_get(Table *table, Value key, Value *value)
 	return true;
 }
 
-static void adjust_capacity(Table *table, int capacity)
+static void adjust_capacity(VM *vm, Table *table, int capacity)
 {
-	Entry *entries = ALLOCATE(Entry, capacity);
+	Entry *entries = ALLOCATE(vm, Entry, capacity);
 	/* rebuild count, exclude "tombstone" */
 	table->count = 0;
 	for (int i = 0; i < capacity; i++) {
@@ -102,12 +102,12 @@ static void adjust_capacity(Table *table, int capacity)
 		table->count++;
 	}
 
-	FREE_ARRAY(Entry, table->entries, table->capacity);
+	FREE_ARRAY(vm, Entry, table->entries, table->capacity);
 	table->entries = entries;
 	table->capacity = capacity;
 }
 
-bool table_set(Table *table, Value key, Value value)
+bool table_set(VM *vm, Table *table, Value key, Value value)
 {
 	if (table->count + 1 > table->capacity * TABLE_MAX_LOAD) {
 		int capacity = GROW_CAPACITY(table->capacity);
@@ -116,7 +116,7 @@ bool table_set(Table *table, Value key, Value value)
 		 * as index changed when capacity differs,
 		 * so we cann't just copy and keep the index same.
 		 */
-		adjust_capacity(table, capacity);
+		adjust_capacity(vm, table, capacity);
 	}
 
 	Entry *entry = find_entry(table->entries, table->capacity, key);
@@ -206,5 +206,15 @@ String *table_find_string(Table *table, const char *chars,
 		}
 
 		index = (index + 1) % table->capacity;
+	}
+}
+
+void table_remove_white(Table *table)
+{
+	for (int i = 0; i < table->capacity; i++) {
+		Entry *entry = &table->entries[i];
+		if (value_is_object(&entry->key) &&
+			!value_to_obj(&entry->key)->is_marked)
+			table_delete(table, entry->key);
 	}
 }

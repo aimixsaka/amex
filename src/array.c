@@ -7,20 +7,20 @@ void init_array(Array *array)
 	array->count = 0;
 }
 
-void write_array(Array *array, Value value)
+void write_array(VM *vm, Array *array, Value value)
 {
 	if (array->capacity < array->count + 1) {
 		int old_capacity = array->capacity;
 		array->capacity = GROW_CAPACITY(old_capacity);
-		array->values = GROW_ARRAY(Value, array->values,
+		array->values = GROW_ARRAY(vm, Value, array->values,
 					   old_capacity, array->capacity);
 	}
 
 	array->values[array->count++] = value;
 }
 
-void free_array(Array *array)
+void free_array(VM *vm, Array *array)
 {
-	FREE_ARRAY(Value, array->values, array->capacity);
+	FREE_ARRAY(vm, Value, array->values, array->capacity);
 	init_array(array);
 }

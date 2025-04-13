@@ -29,4 +29,8 @@
 #define FRAMES_MAX			1024
 #define VM_STACK_MAX			4096
 
+/* ---------- GC related --------- */
+#define GC_INIT_SIZE			1024 * 1024
+#define GC_HEAP_GROW_FACTOR		2
+
 #endif /* #define AMEXCONF_H_defined */

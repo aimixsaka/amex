@@ -12,6 +12,67 @@ do {					\
 static const char UNEXPECTED_CLOSING_DELIM[] = "Unexpected closing delimiter";
 static const char UNEXPECTED_EOF[] = "Unexpected EOF";
 
+static void mark_parse_states(Parser *p, int count)
+{
+	ParseState *state;
+        for (int i = 0; i < count; i++) {
+		state = &p->stack[i];
+		switch (state->type) {
+		case PTYPE_COMMENT:
+		case PTYPE_ROOT:
+			break;
+		case PTYPE_STRING:
+			((GCObject *)state->buf.string.buffer)->is_marked = true;
+			break;
+		case PTYPE_KEYWORD:
+		case PTYPE_TOKEN:
+			((GCObject *)state->buf.string.buffer)->is_marked = true;
+			break;
+		case PTYPE_ARRAY:
+		case PTYPE_TUPLE:
+			push(p->vm, NULL, ARRAY_VAL(state->buf.array));
+			break;
+		case PTYPE_TABLE:
+			push(p->vm, NULL, TABLE_VAL(state->buf.table_state.table));
+			break;
+		case PTYPE_SPECIAL_FORM:
+			push(p->vm, NULL, ARRAY_VAL(state->buf.array));
+			break;
+		}
+        }
+}
+
+static void unmark_parse_states(Parser *p, int count)
+{
+	ParseState *state;
+        for (int i = 0; i < count; i++) {
+		state = &p->stack[i];
+		switch (state->type) {
+		case PTYPE_COMMENT:
+		case PTYPE_ROOT:
+			break;
+		case PTYPE_STRING:
+			((GCObject *)state->buf.string.buffer)->is_marked = false;
+			break;
+		case PTYPE_KEYWORD:
+		case PTYPE_TOKEN:
+			((GCObject *)state->buf.string.buffer)->is_marked = false;
+			break;
+		case PTYPE_ARRAY:
+		case PTYPE_TUPLE:
+			pop(p->vm);
+			break;
+		case PTYPE_TABLE:
+			pop(p->vm);
+			break;
+		case PTYPE_SPECIAL_FORM:
+			pop(p->vm);
+			break;
+		}
+        }
+}
+
+
 static bool is_whitespace(const char c)
 {
 	return c == ' ' || c == '\t' ||
@@ -128,13 +189,20 @@ static void parser_push(Parser *p, ParserType type)
 		PERROR(p, "Parser Stack Overflow.");
 		return;
 	}
+	
+	/* HACK: GC GUARD */
+	int count = p->parser_top - p->stack;
+	mark_parse_states(p, count);
+	
 	if (p->capacity < stack_offset + 1) {
+		
 		int old_capacity = p->capacity;
 		p->capacity = GROW_CAPACITY(p->capacity);
-		p->stack = GROW_ARRAY(ParseState, p->stack,
+		p->stack = GROW_ARRAY(p->vm, ParseState, p->stack,
 				      old_capacity, p->capacity);
 		p->parser_top = p->stack + stack_offset;
 	}
+	
 	p->parser_top++;
 	top = parser_peek(p);
 	if (!top) {
@@ -166,6 +234,8 @@ static void parser_push(Parser *p, ParserType type)
 		top->buf.array = new_array(p->vm, 2);
 		break;
 	}
+	
+	unmark_parse_states(p, count);
 }
 
 static ParseState *parser_pop(Parser *p)
@@ -185,13 +255,19 @@ static void parser_top_append(Parser *p, Value x)
 	/* ParseState Stack Overflow */
 	if (!top)
 		return;
+
+	/* HACK: GC GUARD */
+	int count = p->parser_top - p->stack;
+	mark_parse_states(p, count);
+	push(p->vm, NULL, x);
+	
 	switch (top->type) {
 	case PTYPE_ROOT:
 		p->value = x;
 		p->status = PARSER_FULL; /* Parsed a full lisp form */
 		break;
 	case PTYPE_SPECIAL_FORM: {
-		write_array(top->buf.array, x);
+		write_array(p->vm, top->buf.array, x);
 		Value y;
 		y.type = TYPE_TUPLE;
 		y.data.array = top->buf.array;
@@ -201,12 +277,12 @@ static void parser_top_append(Parser *p, Value x)
 	}
 	case PTYPE_ARRAY:
 	case PTYPE_TUPLE:
-		write_array(top->buf.array, x);
+		write_array(p->vm, top->buf.array, x);
 		break;
 	case PTYPE_TABLE:
 		/* even as Value */
 		if (top->buf.table_state.key_found) {
-			table_set(top->buf.table_state.table, top->buf.table_state.key, x);
+			table_set(p->vm, top->buf.table_state.table, top->buf.table_state.key, x);
 		} else {
 		/* odd as Key */
 			top->buf.table_state.key = x;
@@ -217,6 +293,9 @@ static void parser_top_append(Parser *p, Value x)
 		PERROR(p, "Expected container type.");
 		break;
 	}
+
+	pop(p->vm);
+	unmark_parse_states(p, count);
 }
 
 static inline bool str_eq(const char *s1, uint32_t len1,
@@ -237,6 +316,10 @@ static Value buf_build_token(Parser *p, Buffer *buf, bool is_keyword)
 	const char first_char = buf->data[0];
 	const char *start = buf->data;
 	const char *end = buf->data + len;
+
+	/* HACK: GC GUARD */
+	mark_parse_states(p, p->parser_top - p->stack);
+	
 	if (is_keyword) {
 		x.type = TYPE_KEYWORD;
 		x.data.string = buf_to_str(p->vm, buf);
@@ -261,6 +344,9 @@ static Value buf_build_token(Parser *p, Buffer *buf, bool is_keyword)
 			x.data.string = buf_to_str(p->vm, buf);
 		}
 	}
+	
+	unmark_parse_states(p, p->parser_top - p->stack);
+	
 	return x;
 }
 
@@ -299,6 +385,10 @@ static int main_state(Parser *p, char c)
 		v.type = TYPE_SYMBOL;
 		ParseState *top = parser_peek(p);
 		Array *quote_pair = top->buf.array;
+		
+		/* HACK: GC GUARD */
+		mark_parse_states(p, p->parser_top - p->stack);
+		
 		switch (c) {
 		case '\'':	/* quote */
 			qs = copy_string(p->vm, "quote", 5);
@@ -314,7 +404,10 @@ static int main_state(Parser *p, char c)
 			break;
 		}
 		v.data.string = qs;
-		write_array(quote_pair, v);
+		write_array(p->vm, quote_pair, v);
+
+		unmark_parse_states(p, p->parser_top - p->stack);
+
 		return 1;
 	}
 	if (is_symbol_char(c)) {
@@ -340,24 +433,42 @@ static int root_state(Parser *p, char c)
 
 static int token_state(Parser *p, const char c)
 {
+
+	/* HACK: GC GUARD */
+	int count = p->parser_top - p->stack;
+	mark_parse_states(p, count);
+
 	ParseState *top = parser_peek(p);
 	Buffer *buf = top->buf.string.buffer;
 	if (is_whitespace(c) || c == ')'|| c == ']' || c == '}') {
 		parser_pop(p);
 		parser_top_append(p, buf_build_token(p, buf,
 					top->type == PTYPE_KEYWORD));
+
+		unmark_parse_states(p, count);
+
 		return (c == ')' || c == ']' || c == '}') ? 0 : 1;
 	} else if (is_symbol_char(c)) {
-		buf_push(buf, c);
+		buf_push(p->vm, buf, c);
+
+		unmark_parse_states(p, count);
+
 		return 1;
 	} else {
 		PERROR(p, "Expect a symbol char.");
+
+		unmark_parse_states(p, count);
+
 		return 1;
 	}
 }
 
 static int form_state(Parser *p, const char c)
 {
+	/* HACK: GC GUARD */
+	int count = p->parser_top - p->stack;
+	mark_parse_states(p, count);
+
 	if (c == ')') {
 		ParseState *top = parser_pop(p);
 		Array *array = top->buf.array;
@@ -365,17 +476,30 @@ static int form_state(Parser *p, const char c)
 		x.type = TYPE_TUPLE;
 		x.data.array = array;
 		parser_top_append(p, x);
+
+		unmark_parse_states(p, count);
+
 		return 1;
 	} else if (c == ']' || c == '}') {
 		PERROR(p, UNEXPECTED_CLOSING_DELIM);
+
+		unmark_parse_states(p, count);
+
 		return 1;
 	} else {
+
+		unmark_parse_states(p, count);
+
 		return main_state(p, c);
 	}
 }
 
 static int array_state(Parser *p, const char c)
 {
+	/* HACK: GC GUARD */
+	int count = p->parser_top - p->stack;
+	mark_parse_states(p, count);
+
 	if (c == ']') {
 		ParseState *top = parser_pop(p);
 		Array *arr = top->buf.array;
@@ -383,16 +507,29 @@ static int array_state(Parser *p, const char c)
 		x.type = TYPE_ARRAY;
 		x.data.array = arr;
 		parser_top_append(p, x);
+
+		unmark_parse_states(p, count);
+
 		return 1;
 	} else if (c == ')' || c == '}') {
+
+		unmark_parse_states(p, count);
+
 		PERROR(p, UNEXPECTED_CLOSING_DELIM);
 		return 1;
 	} else {
+
+		unmark_parse_states(p, count);
+
 		return main_state(p, c);
 	}
 }
 
 static int string_state(Parser *p, const char c) {
+	/* HACK: GC GUARD */
+	int count = p->parser_top - p->stack;
+	mark_parse_states(p, count);
+
 	ParseState *top = parser_peek(p);
 	switch (top->buf.string.state) {
 	case STRING_STATE_BASE:
@@ -405,7 +542,7 @@ static int string_state(Parser *p, const char c) {
 			parser_pop(p);
 			parser_top_append(p, x);
 		} else {
-			buf_push(top->buf.string.buffer, c);
+			buf_push(p->vm, top->buf.string.buffer, c);
 		}
 		break;
 	case STRING_STATE_ESCAPE: {
@@ -437,13 +574,19 @@ static int string_state(Parser *p, const char c) {
 			break;
 		default:
 			PERROR(p, "Unknown string escape sequence.");
+
+			unmark_parse_states(p, count);
+
 			return 1;
 		}
-		buf_push(top->buf.string.buffer, next);
+		buf_push(p->vm, top->buf.string.buffer, next);
 		top->buf.string.state = STRING_STATE_BASE;
 		break;
 	}
 	}
+
+	unmark_parse_states(p, count);
+
 	return 1;
 }
 
@@ -452,6 +595,10 @@ static int string_state(Parser *p, const char c) {
  * with even item as key, odd item as value.
  */
 static int table_state(Parser *p, const char c) {
+	/* HACK: GC GUARD */
+	int count = p->parser_top - p->stack;
+	mark_parse_states(p, count);
+
 	if (c == '}') {
 		ParseState *top = parser_pop(p);
 		if (!top->buf.table_state.key_found) {
@@ -459,15 +606,27 @@ static int table_state(Parser *p, const char c) {
 			x.type = TYPE_TABLE;
 			x.data.table = top->buf.table_state.table;
 			parser_top_append(p, x);
+
+			unmark_parse_states(p, count);
+
 			return 1;
 		} else {
 			PERROR(p, "Odd number of items in dict literal.");
+
+			unmark_parse_states(p, count);
+
 			return 1;
 		}
 	} else if (c == ')' || c == ']') {
 		PERROR(p, UNEXPECTED_CLOSING_DELIM);
+
+		unmark_parse_states(p, count);
+
 		return 1;
 	} else {
+
+		unmark_parse_states(p, count);
+
 		return main_state(p, c);
 	}
 }
@@ -578,7 +737,7 @@ void reset_parser(Parser *p)
 
 void free_parser(Parser *p)
 {
-	FREE_ARRAY(ParseState, p->stack, p->capacity);
+	FREE_ARRAY(p->vm, ParseState, p->stack, p->capacity);
 }
 
 void init_parser(VM *vm, Parser *p)

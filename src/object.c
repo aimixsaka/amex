@@ -6,7 +6,7 @@
 
 static GCObject *allocate_object(VM *vm, size_t size, ObjType type)
 {
-	GCObject *object = (struct GCObject *)reallocate(NULL, 0, size);
+	GCObject *object = (struct GCObject *)reallocate(vm, NULL, 0, size);
 
 	object->next = vm->objects;
 	object->type = type;
@@ -27,8 +27,14 @@ static String *allocate_string(VM *vm, char *chars,
 	s->length = length;
 	s->chars = chars;
 	s->hash = hash;
+	
+	/* HACK: GC GUARD */					
+	push(vm, NULL, STRING_VAL(s));
+	
 	/* intern string if not in table */
-	table_set(&vm->strings, STRING_VAL(s), NIL_VAL);
+	table_set(vm, &vm->strings, STRING_VAL(s), NIL_VAL);
+
+	pop(vm);
 	return s;
 }
 
@@ -44,7 +50,7 @@ String *copy_string(VM *vm, const char *chars, uint32_t length)
 		return interned;
 	}
 
-	char *heap_chars = ALLOCATE(char, length + 1);
+	char *heap_chars = ALLOCATE(vm, char, length + 1);
 	memcpy(heap_chars, chars, length);
 	heap_chars[length] = '\0';
 
@@ -54,29 +60,49 @@ String *copy_string(VM *vm, const char *chars, uint32_t length)
 Buffer *new_buffer(VM *vm, uint32_t capacity)
 {
 	Buffer *buf = ALLOCATE_OBJ(vm, Buffer, OBJ_BUFFER);
+	
+	/* HACK: GC GUARD */
+	((GCObject*)buf)->is_marked = true;
+	
 	buf->length = 0;
 	buf->capacity = capacity;
-	buf->data = ALLOCATE(char, capacity);
+	buf->data = ALLOCATE(vm, char, capacity);
+
+	((GCObject*)buf)->is_marked = false;
 	return buf;
 }
 
 Array *new_array(VM *vm, uint32_t capacity)
 {
 	Array *array = ALLOCATE_OBJ(vm, Array, OBJ_ARRAY);
+	
+	/* HACK: GC GUARD */
+	push(vm, NULL, ARRAY_VAL(array));
+	
 	init_array(array);
-	array->values = ALLOCATE(Value, capacity);
+	array->capacity = capacity;
+	array->values = ALLOCATE(vm, Value, capacity);
+
+	pop(vm);
 	return array;
 }
 
-Table *new_table(VM *vm,uint32_t capacity)
+Table *new_table(VM *vm, uint32_t capacity)
 {
 	Table *table = ALLOCATE_OBJ(vm, Table, OBJ_TABLE);
+	
+	/* HACK: GC GUARD */
+	push(vm, NULL, TABLE_VAL(table));
+	
 	init_table(table);
-	table->entries = ALLOCATE(Entry, capacity);
+	table->entries = ALLOCATE(vm, Entry, capacity);
 	for (int i = 0; i < capacity; i++) {
 		table->entries[i].key = NIL_VAL;
 		table->entries[i].value = NIL_VAL;
 	}
+	
+	pop(vm);
+	
 	return table;
 }
 
@@ -102,7 +128,7 @@ Upvalue *new_upvalue(VM *vm, Value *slot)
 
 Closure *new_closure(VM *vm, Function *function)
 {
-	Upvalue **upvalues = ALLOCATE(Upvalue*,
+	Upvalue **upvalues = ALLOCATE(vm, Upvalue*,
 				      function->upval_count);
 	for (int i = 0; i < function->upval_count; i++)
 		upvalues[i] = NULL;

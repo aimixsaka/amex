@@ -13,6 +13,7 @@ typedef enum {
 	OBJ_TABLE,
 	OBJ_FUNCTION,
 	OBJ_CLOSURE,
+	OBJ_NATIVE_FN,
 } ObjType;
 
 typedef struct GCObject		GCObject ;
@@ -29,6 +30,7 @@ typedef double			Number;
 
 /* ==== Value Related Start ==== */
 /* forward declaration */
+typedef struct VM VM;
 typedef struct Buffer		Buffer;
 typedef struct String		String;
 typedef struct Array		Array;
@@ -63,6 +65,7 @@ typedef union ValueData {
 	Table			*table;
 	Function		*func;
 	Closure			*closure;
+	NativeFunction		*native_fn;
 } ValueData;
 
 /* tagged union Value */
@@ -89,22 +92,33 @@ typedef struct Value {
 #define AS_CSTRING(value)	(((value).data.string->chars))
 #define AS_FUNCTION(value)	(((value).data.func))
 #define AS_CLOSURE(value)	(((value).data.closure))
+#define AS_TABLE(value)		(((value).data.table))
+#define AS_NATIVE_FN(value)	(((value).data.native_fn))
 
-#define NIL_VAL			((Value){ TYPE_NIL,      { .boolean = false } })
-#define BOOL_VAL(val)		((Value){ TYPE_BOOL,     { .boolean = val   } })
-#define NUMBER_VAL(val)		((Value){ TYPE_NUMBER,   { .number  = val   } })
-#define ARRAY_VAL(val)		((Value){ TYPE_ARRAY,    { .array   = val   } })
-#define TUPLE_VAL(val)		((Value){ TYPE_TUPLE,    { .array   = val   } })
-#define STRING_VAL(val)		((Value){ TYPE_STRING,   { .string  = val   } })
-#define FUNCTION_VAL(val)	((Value){ TYPE_FUNCTION, { .func    = val   } })
-#define CLOSURE_VAL(val)	((Value){ TYPE_CLOSURE,  { .closure = val   } })
+#define NIL_VAL			((Value){ TYPE_NIL,      { .boolean   = false } })
+#define BOOL_VAL(val)		((Value){ TYPE_BOOL,     { .boolean   = val   } })
+#define NUMBER_VAL(val)		((Value){ TYPE_NUMBER,   { .number    = val   } })
+#define ARRAY_VAL(val)		((Value){ TYPE_ARRAY,    { .array     = val   } })
+#define TUPLE_VAL(val)		((Value){ TYPE_TUPLE,    { .array     = val   } })
+#define STRING_VAL(val)		((Value){ TYPE_STRING,   { .string    = val   } })
+#define FUNCTION_VAL(val)	((Value){ TYPE_FUNCTION, { .func      = val   } })
+#define CLOSURE_VAL(val)	((Value){ TYPE_CLOSURE,  { .closure   = val   } })
+#define TABLE_VAL(val)		((Value){ TYPE_TABLE,    { .table     = val   } })
+#define NATIVE_FN_VAL(val)	((Value){ TYPE_NATIVE,   { .native_fn = val   } })
 
+bool value_is_object(Value *x);
+void mark_object(VM *vm, GCObject *obj);
+void obj_to_value(GCObject *obj, ValueType t, Value *x);
+GCObject *value_to_obj(Value *x);
 bool value_eq(Value v1, Value v2);
+void print_object(GCObject *obj, const char *sep);
 void print_value(Value *v, const char *sep);
+const char *type_string(ValueType t);
+const char *obj_type_string(GCObject* obj);
+
 /* ==== Value Related End ==== */
 
-/* forward declaration */
-typedef struct VM VM;
+
 /** Buffer **/
 /*
  * Mainly used for parser, to save temp data,
@@ -119,7 +133,7 @@ struct Buffer {
 
 Buffer *new_buffer(VM *vm, uint32_t capacity);
 String *buf_to_str(VM *vm, Buffer *buf);
-void buf_push(Buffer *buf, const char c);
+void buf_push(VM *vm, Buffer *buf, const char c);
 void free_buffer();
 
 /** String **/
@@ -142,8 +156,8 @@ struct Array {
 
 Array *new_array(VM *vm, uint32_t capacity);
 void init_array(Array *array);
-void write_array(Array *array, Value val);
-void free_array(Array *array);
+void write_array(VM *vm, Array *array, Value val);
+void free_array(VM *vm, Array *array);
 
 /** Table **/
 typedef struct Entry {
@@ -160,12 +174,13 @@ struct Table {
 
 Table *new_table(VM *vm, uint32_t capacity);
 void init_table(Table *table);
-void free_table(Table *table);
+void free_table(VM *vm, Table *table);
 String *table_find_string(Table *table, const char *chars,
 			  uint32_t length, uint32_t hash);
 bool table_get(Table *table, Value key, Value *value);
-bool table_set(Table *table, Value key, Value value);
+bool table_set(VM *vm, Table *table, Value key, Value value);
 bool table_delete(Table *table, Value key);
+void table_remove_white(Table *table);
 
 
 
@@ -198,7 +213,6 @@ typedef struct {
 					STRING_STATE_ESCAPE,
 			} state;
 		} string;
-		Value spe_form;
 	} buf;
 } ParseState;
 
@@ -293,9 +307,9 @@ typedef struct {
 } Chunk;
 
 void init_chunk(Chunk *chunk);
-void free_chunk(Chunk *chunk);
-void write_chunk(Chunk *chunk, uint8_t byte);
-void write_short(Chunk *chunk, uint16_t num);
+void free_chunk(VM *vm, Chunk *chunk);
+void write_chunk(VM *vm, Chunk *chunk, uint8_t byte);
+void write_short(VM *vm, Chunk *chunk, uint16_t num);
 /* ==== Chunk Related End ==== */
 
 
@@ -425,6 +439,7 @@ Function *new_function(VM *vm);
 Upvalue *new_upvalue(VM *vm, Value *slot);
 Closure *new_closure(VM *vm, Function *function);
 
+void mark_compiler_roots(VM *vm);
 Function *compile(VM *vm, Value ast);
 /* ==== Compiler Related End ==== */
 
@@ -434,26 +449,27 @@ Function *compile(VM *vm, Value ast);
 Table *core_env(VM *vm, Table *replacement);
 
 /* ==== Memory Related Start ==== */
-void collect_garbage();
+void collect_garbage(VM *vm);
 
 
-#define ALLOCATE(type, count)						\
-	(type*)reallocate(NULL, 0, sizeof(type) * (count))
+#define ALLOCATE(vm, type, count)					\
+	(type*)reallocate(vm, NULL, 0, sizeof(type) * (count))
 
 #define GROW_CAPACITY(capacity) 					\
 	((capacity) < 8 ? 8 : (capacity) * 2)
 
-#define GROW_ARRAY(type, pointer, old_count, new_count) 		\
-	(type*)reallocate(pointer, sizeof(type) * (old_count), 		\
+#define GROW_ARRAY(vm, type, pointer, old_count, new_count) 		\
+	(type*)reallocate(vm, pointer, sizeof(type) * (old_count),	\
 			  sizeof(type) * (new_count))
 
-#define FREE(type, pointer) reallocate(pointer, sizeof(type), 0)
+#define FREE(vm, type, pointer) reallocate(vm, pointer, sizeof(type), 0)
 
-#define FREE_ARRAY(type, pointer, old_count) 				\
-	reallocate(pointer, sizeof(type) * (old_count), 0)
+#define FREE_ARRAY(vm, type, pointer, old_count)			\
+	reallocate(vm, pointer, sizeof(type) * (old_count), 0)
 
 
-void *reallocate(void *pointer, size_t old_size, size_t new_size);
+void *reallocate(VM *vm, void *pointer, size_t old_size, size_t new_size);
+void free_object(VM *vm, GCObject *object);
 void free_objects(VM *vm);
 /* ==== Memory Related End ==== */
 
@@ -500,6 +516,11 @@ struct VM {
 	Table			*globals;	/* global variables */
 	Table			strings;	/* string intern */
 	GCObject		*objects;	/* for gc */
+	size_t			bytes_allocated;
+	size_t			next_GC;
+	int			gray_count;
+	int			gray_capacity;
+	GCObject		**gray_stack;
 };
 
 typedef enum {
@@ -513,6 +534,9 @@ typedef struct {
 } InterpretResult;
 
 
+bool push(VM *vm, CallFrame *frame, Value val);
+Value pop(VM *vm);
+Value popn(VM *vm, int n);
 void init_vm(VM *vm);
 void set_vm_globals(VM *vm, Table *env);
 void free_vm(VM *vm);

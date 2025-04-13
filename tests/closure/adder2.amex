@@ -1,0 +1,9 @@
+(def f nil)
+
+(do
+	(def x 2)
+	(set f (fn [] (set x (+ x 1)))))
+
+(print (f)) # expect: 3
+(print (f)) # expect: 4
+(print (f)) # expect: 5

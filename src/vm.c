@@ -553,7 +553,6 @@ do {									\
 		case OP_CLOSE_UPVALUE: {
 			uint16_t index = READ_SHORT();
 			close_upvalues(vm, &frame->slots[index]);
-			pop(vm);
 			break;
 		}
 		case OP_CLOSURE: {

@@ -264,7 +264,9 @@ static void parser_top_append(Parser *p, Value x)
 	switch (top->type) {
 	case PTYPE_ROOT:
 		p->value = x;
-		p->status = PARSER_FULL; /* Parsed a full lisp form */
+		if (!(p->status == PARSER_ERROR))
+			/* Parsed a full lisp form and no error occured */
+			p->status = PARSER_FULL;
 		break;
 	case PTYPE_SPECIAL_FORM: {
 		write_array(p->vm, top->buf.array, x);

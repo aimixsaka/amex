@@ -34,12 +34,20 @@ static int one_byte_instruction(const char *name, Chunk *chunk,
 	return offset + 2;
 }
 
-static int two_bytes_instruction(const char *name, Chunk *chunk,
+static int constant_instruction(const char *name, Chunk *chunk,
 				 int offset)
 {
 	uint16_t constant = (uint16_t)((chunk->code[offset + 1] << 8) | (chunk->code[offset + 2]));
 	printf("[%-16s %6d] ", name, constant);
 	print_value(&chunk->constants.values[constant], "\n");
+	return offset + 3;
+}
+
+static int two_bytes_instruction(const char *name, Chunk *chunk,
+				 int offset)
+{
+	uint16_t two_bytes = (uint16_t)((chunk->code[offset + 1] << 8) | (chunk->code[offset + 2]));
+	printf("[%-16s %6d]\n", name, two_bytes);
 	return offset + 3;
 }
 
@@ -68,6 +76,8 @@ int disassemble_instruction(Chunk *chunk, int offset)
 		return simple_instruction("OP_RESTORE_TOP", offset);
 	case OP_EQUAL:
 		return simple_instruction("OP_EQUAL", offset);
+	case OP_NOT_EQUAL:
+		return simple_instruction("OP_NOT_EQUAL", offset);
 	case OP_GREATER:
 		return simple_instruction("OP_GREATER", offset);
 	case OP_LESS:
@@ -97,15 +107,15 @@ int disassemble_instruction(Chunk *chunk, int offset)
 	case OP_SET_UPVALUE:
 		return one_byte_instruction("OP_SET_UPVALUE", chunk, offset);
 	case OP_CONSTANT:
-		return two_bytes_instruction("OP_CONSTANT", chunk, offset);
+		return constant_instruction("OP_CONSTANT", chunk, offset);
 	case OP_CLOSE_UPVALUE:
-		return two_bytes_instruction("OP_CLOSE_UPVALUE", chunk, offset);
+		return constant_instruction("OP_CLOSE_UPVALUE", chunk, offset);
 	case OP_GET_GLOBAL:
-		return two_bytes_instruction("OP_GET_GLOBAL", chunk, offset);
+		return constant_instruction("OP_GET_GLOBAL", chunk, offset);
 	case OP_DEFINE_GLOBAL:
-		return two_bytes_instruction("OP_DEFINE_GLOBAL", chunk, offset);
+		return constant_instruction("OP_DEFINE_GLOBAL", chunk, offset);
 	case OP_SET_GLOBAL:
-		return two_bytes_instruction("OP_SET_GLOBAL", chunk, offset);
+		return constant_instruction("OP_SET_GLOBAL", chunk, offset);
 	case OP_JUMP_IF_FALSE:
 		return two_bytes_instruction("OP_JUMP_IF_FALSE", chunk, offset);
 	case OP_JUMP:

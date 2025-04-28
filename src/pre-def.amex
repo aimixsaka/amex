@@ -1,0 +1,6 @@
+(def defn :macro
+  (fn [name args & body]
+      ~(def ,name (fn ,name ,args ,;body))))
+
+(def ++ :macro (fn [x]
+	~(set ,x (+ ,x 1))))

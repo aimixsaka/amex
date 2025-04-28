@@ -1,6 +1,76 @@
 #include "include/amex.h"
 #include "debug.h"
 
+static char *read_file(const char *path)
+{
+	FILE *f = fopen(path, "rb");
+	if (f == NULL) {
+		fprintf(stderr, "Could not open file \"%s\".\n", path);
+		exit(74);
+	}
+
+	/* idiom to get file size in bytes */
+	fseek(f, 0L, SEEK_END);
+	size_t fsize = ftell(f);
+	rewind(f);
+
+	char *buf = (char *)malloc(fsize + 1);
+	if (buf == NULL) {
+		fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
+		exit(74);
+	}
+	size_t bytes_read = fread(buf, sizeof(char), fsize, f);
+	if (bytes_read < fsize) {
+		fprintf(stderr, "Could not read file \"%s\".\n", path);
+		exit(74);
+	}
+	/* use trailing EOF as sentinel */
+	buf[bytes_read] = '\0';
+
+	fclose(f);
+	return buf;
+}
+
+static int load_predef(Parser *p, VM *vm, const char *path)
+{
+	Function *f;
+	char *source = read_file(path);
+
+	int exit_code = 0;
+	const char *reader = source;
+
+
+	for (;;) {
+		reset_parser(p);
+		while (p->status == PARSER_PENDING) {
+			reader += parse_cstring(p, reader);
+		}
+
+		if (p->error) {
+			printf("Parse error: %s\n", p->error);
+			exit_code = 65;
+			goto ret;
+		}
+		if (*reader == '\0')
+			break;
+
+		f = compile(vm, p->value);
+		if (f == NULL) {
+			exit_code = 66;
+			goto ret;
+		}
+
+		/* Execute bytecode in VM */
+		InterpretResult res = interpret(vm, f);
+		if (res.status == INTERPRET_RUNTIME_ERROR) {
+			exit_code = 67;
+			goto ret;
+		}
+	}
+ret:
+	free(source);
+	return exit_code;
+}
 
 static void repl()
 {
@@ -10,11 +80,12 @@ static void repl()
 	char buffer[AMEX_REPL_LINE_MAX_LENGTH] = { 0 };
 	const char *reader;
 
-	puts("Amex " AMEX_LANG_VERSION_STRING);
-	puts("Press Ctrl+d to exit.");
 	init_vm(&vm);
 	set_vm_globals(&vm, core_env(&vm, NULL));
 	init_parser(&vm, &p);
+	load_predef(&p, &vm, "./src/pre-def.amex");
+	puts("Amex " AMEX_LANG_VERSION_STRING);
+	puts("Press Ctrl+d to exit.");
 	for (;;) {
 		/* Flush the input buffer */
 		buffer[0] = '\0';
@@ -68,35 +139,6 @@ on_error:
 	free_vm(&vm);
 }
 
-static char *read_file(const char *path)
-{
-	FILE *f = fopen(path, "rb");
-	if (f == NULL) {
-		fprintf(stderr, "Could not open file \"%s\".\n", path);
-		exit(74);
-	}
-
-	/* idiom to get file size in bytes */
-	fseek(f, 0L, SEEK_END);
-	size_t fsize = ftell(f);
-	rewind(f);
-
-	char *buf = (char *)malloc(fsize + 1);
-	if (buf == NULL) {
-		fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
-		exit(74);
-	}
-	size_t bytes_read = fread(buf, sizeof(char), fsize, f);
-	if (bytes_read < fsize) {
-		fprintf(stderr, "Could not read file \"%s\".\n", path);
-		exit(74);
-	}
-	/* use trailing EOF as sentinel */
-	buf[bytes_read] = '\0';
-
-	fclose(f);
-	return buf;
-}
 
 static void run_file(const char *path)
 {
@@ -112,6 +154,7 @@ static void run_file(const char *path)
 	init_vm(&vm);
 	set_vm_globals(&vm, core_env(&vm, NULL));
 	init_parser(&vm, &p);
+	load_predef(&p, &vm, "./src/pre-def.amex");
 	for (;;) {
 		reset_parser(&p);
 		/*

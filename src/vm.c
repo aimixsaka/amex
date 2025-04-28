@@ -285,19 +285,24 @@ do {									\
 
 #define EQ_OP(n, init_val)						\
 do {									\
+	if (n < 2) {							\
+		popn(vm, n);						\
+		PUSH(BOOL_VAL(init_val));				\
+		break;							\
+	}								\
 	int i;								\
 	Value v1, v2;							\
 	bool res = init_val;						\
 	v1 = peek(vm, n - 1);						\
-	for (i = n - 1; i >= 0; i--) {					\
+	for (i = n - 2; i >= 0; i--) {					\
 		v2 = peek(vm, i);					\
 		res = value_eq(v1, v2);					\
-		if (res != init_val)					\
+		if (!res)						\
 			break;						\
 		v1 = v2;						\
 	}								\
 	popn(vm, n);							\
-	PUSH(BOOL_VAL(res));						\
+	PUSH(BOOL_VAL(res == init_val));				\
 } while (0)
 
 	for (;;) {

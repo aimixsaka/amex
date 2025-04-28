@@ -245,6 +245,7 @@ const char *type_string(ValueType t)
 	case TYPE_TABLE:
 		return "TYPE_TABLE";
 	default:
+		fprintf(stderr, "Unknown ValueType: %d\n", t);
 		exit(4);
 	}
 }

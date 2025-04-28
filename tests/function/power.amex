@@ -1,0 +1,8 @@
+(defn ** [x y]
+	(def res 1)
+	(while (not= y 0)
+		(set res (* res x))
+		(set y (- y 1)))
+	res)
+
+(print (** 2 3)) # expect: 8

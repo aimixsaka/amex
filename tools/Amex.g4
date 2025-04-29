@@ -4,21 +4,24 @@ file: expr* EOF;
 
 // Expressions
 expr
-    : '(' expr* ')'               # tupleExpr
-    | '[' expr* ']'               # arrayExpr
-    | '{' (expr expr)* '}'        # tableExpr
-    | string                      # stringExpr
-    | ':' token                   # keywordExpr
-    | quote_expr                  # specialExpr
-    | token                       # tokenExpr
+    : tuple_expr
+    | array_expr
+    | table_expr
+    | keyword_expr
+    | quote_unquote_expr
+    | string
+    | token
     ;
 
-// Special quoting forms: 'quote, ~quasiquote, ,unquote, ;splice
-quote_expr
-    : '\'' expr                   # quoteExpr
-    | '~' expr                    # quasiquoteExpr
-    | ',' expr                    # unquoteExpr
-    | ';' expr                    # spliceExpr
+tuple_expr: '(' expr* ')';
+array_expr: '[' expr* ']';
+table_expr: '{' (expr expr)* '}';
+keyword_expr: ':' token;
+quote_unquote_expr
+    : '\'' expr
+    | '~' expr
+    | ',' expr
+    | ';' expr
     ;
 
 string
@@ -36,7 +39,7 @@ NIL: 'nil';
 BOOL: 'true' | 'false';
 
 NUMBER
-    : ('+' | '-')? DIGIT+ ('.' DIGIT+)? ([eE] ('+' | '-')? DIGIT+)? 
+    : ('+' | '-')? DIGIT+ ('.' DIGIT+)? ([eE] ('+' | '-')? DIGIT+)?
     ;
 
 SYMBOL

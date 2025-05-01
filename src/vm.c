@@ -260,27 +260,32 @@ do {									\
 
 #define COMPARE_OP(op, n, init_val)					\
 do {									\
+	if (n < 2) {							\
+		popn(vm, n);						\
+		PUSH(BOOL_VAL(init_val));				\
+		break;							\
+	}								\
 	int i;								\
-	bool res = init_val;						\
 	Value v1, v2;							\
+	bool res = init_val;						\
 	v1 = peek(vm, n - 1);						\
 	if (!IS_NUMBER(v1)) {						\
 		runtime_error(vm, "expected number val\n");		\
 		return IERROR;						\
 	}								\
-	for (i = n - 1; i >= 0; i--) {					\
+	for (i = n - 2; i >= 0; i--) {					\
 		v2 = peek(vm, i);					\
 		if (!IS_NUMBER(v2)) {					\
 			runtime_error(vm, "expected number val.\n");	\
 			return IERROR;					\
 		}							\
 		res = AS_NUMBER(v1) op AS_NUMBER(v2);			\
-		if (res != init_val)					\
+		if (!res)						\
 			break;						\
 		v1 = v2;						\
 	}								\
 	popn(vm, n);							\
-	PUSH(BOOL_VAL(res));						\
+	PUSH(BOOL_VAL(res == init_val));				\
 } while (0)
 
 #define EQ_OP(n, init_val)						\
@@ -501,11 +506,11 @@ do {									\
 			break;
 		}
 		case OP_GREATER: {
-			COMPARE_OP(>, op_temp, false);
+			COMPARE_OP(>, op_temp, true);
 			break;
 		}
 		case OP_LESS: {
-			COMPARE_OP(<, op_temp, false);
+			COMPARE_OP(<, op_temp, true);
 			break;
 		}
 		case OP_GREATER_EQUAL: {

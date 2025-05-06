@@ -13,6 +13,11 @@
 Always WIP...
 
 ## Summary
+
+This project serves as a platform for me to practice and experiment with new ideas and concepts, such as `Data Oriented Design`, `Arena allocator`...
+
+That said, it's a project just for fun.
+
 There are several problems in this interpreter:
 
 - Did too many things at runtime, say, e.g, why change argument number at runtime ?
@@ -21,7 +26,13 @@ There are several problems in this interpreter:
 - Security problem.
 
 But at least it did one thing right: Don't leak memory.
+
 ## Reference
 
 - [Janet](https://github.com/janet-lang/janet)
+
+  A small and beautiful programming language & bytecode vm
+
 - [Crafting Interpreters](https://craftinginterpreters.com/contents.html)
+
+  Great book for learning to write interpreter

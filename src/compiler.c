@@ -797,6 +797,7 @@ static void compile_form(uint8_t elemn, const Value *elms, uint8_t flags)
 	Value head = elms[0];
 	switch (head.type) {
 	case TYPE_SYMBOL:
+		/* NOTE: not a bug with missing break; just fallthrough to tuple case */
 		if (!get_special_fn(AS_CSTRING(head)))
 			current->constant_count++;
 	case TYPE_TUPLE:

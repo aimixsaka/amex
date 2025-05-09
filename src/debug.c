@@ -4,13 +4,13 @@
 
 void disassemble_chunk(Chunk *chunk, const char *name)
 {
-	printf("== function %s ==\n", name);
+	fprintf(stderr, "== function %s ==\n", name);
 
 	for (int offset = 0; offset < chunk->count;) {
 		offset = disassemble_instruction(chunk, offset);
 	}
 
-	printf("== function %s end ==\n", name);
+	fprintf(stderr, "== function %s end ==\n", name);
 }
 
 /*
@@ -21,7 +21,7 @@ void dump_talbe(Table *table)
 
 static int simple_instruction(const char *name, int offset)
 {
-	printf("%s\n", name);
+	fprintf(stderr, "%s\n", name);
 	return offset + 1;
 }
 
@@ -29,8 +29,8 @@ static int one_byte_instruction(const char *name, Chunk *chunk,
 				int offset)
 {
 	uint8_t arg = chunk->code[offset + 1];
-	printf("[%-16s %6d] ", name, arg);
-	printf("\n");
+	fprintf(stderr, "[%-16s %6d] ", name, arg);
+	fprintf(stderr, "\n");
 	return offset + 2;
 }
 
@@ -38,8 +38,8 @@ static int constant_instruction(const char *name, Chunk *chunk,
 				 int offset)
 {
 	uint16_t constant = (uint16_t)((chunk->code[offset + 1] << 8) | (chunk->code[offset + 2]));
-	printf("[%-16s %6d] ", name, constant);
-	print_value(&chunk->constants.values[constant], "\n");
+	fprintf(stderr, "[%-16s %6d] ", name, constant);
+	print_value(&chunk->constants.values[constant], stderr, "\n");
 	return offset + 3;
 }
 
@@ -47,14 +47,14 @@ static int two_bytes_instruction(const char *name, Chunk *chunk,
 				 int offset)
 {
 	uint16_t two_bytes = (uint16_t)((chunk->code[offset + 1] << 8) | (chunk->code[offset + 2]));
-	printf("[%-16s %6d]\n", name, two_bytes);
+	fprintf(stderr, "[%-16s %6d]\n", name, two_bytes);
 	return offset + 3;
 }
 
 
 int disassemble_instruction(Chunk *chunk, int offset)
 {
-	printf("%04d ", offset);
+	fprintf(stderr, "%04d ", offset);
 
 	uint8_t instruction = chunk->code[offset];
 	switch (instruction) {
@@ -126,21 +126,21 @@ int disassemble_instruction(Chunk *chunk, int offset)
 		return one_byte_instruction("OP_CALL", chunk, offset);
 	case OP_CLOSURE: {
 		uint16_t constant = (uint16_t)((chunk->code[offset + 1] << 8) | (chunk->code[offset + 2]));
-		printf("[%-16s %6d] ", "OP_CLOSURE", constant);
+		fprintf(stderr, "[%-16s %6d] ", "OP_CLOSURE", constant);
 		Value v = chunk->constants.values[constant];
 		Function *f = AS_FUNCTION(v);
-		print_value(&v, "\n");
+		print_value(&v, stderr, "\n");
 		offset += 3;
 		for (int j = 0; j < f->upval_count; j++) {
 			int is_local = chunk->code[offset++];
 			int index = chunk->code[offset++];
-			printf("%04d      |                     %s %d\n",
+			fprintf(stderr, "%04d      |                     %s %d\n",
 			       offset - 2, is_local ? "local" : "upvalue", index);
 		}
 		return offset;
 	}
 	default:
-		printf("Unknown opcode %d\n", instruction);
+		fprintf(stderr, "Unknown opcode %d\n", instruction);
 		return offset + 1;
 	}
 }

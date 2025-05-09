@@ -4,119 +4,177 @@
 
 static int max_print_recursion = 100000;
 
-static void print_function(Function *f, const char *sep)
+static void print_function(Function *f, FILE *out, const char *sep)
 {
 	if (f->name) {
-		printf("<function %s>%s", f->name->chars, sep);
+		fprintf(out,  "<function %s>%s", f->name->chars, sep);
 	} else {
-		printf("<function %p>%s", f, sep);
+		fprintf(out,  "<function %p>%s", f, sep);
 	}
 }
 
-void print_object(GCObject *obj, const char *sep)
+void print_object(GCObject *obj, FILE *out, const char *sep)
 {
 	Value x;
 	switch (obj->type) {
 	case OBJ_STRING: {
 		obj_to_value(obj, TYPE_STRING, &x);
-		print_value(&x, sep);
+		print_value(&x, out, sep);
 		break;
 	}
 	case OBJ_BUFFER: {
 		Buffer *buf = (Buffer*)obj;
-		printf("Buffer(\"%.*s\")%s", buf->length, buf->data, sep);
+		fprintf(out,  "Buffer(\"%.*s\")%s", buf->length, buf->data, sep);
 		break;
 	}
 	case OBJ_ARRAY: {
 		obj_to_value(obj, TYPE_ARRAY, &x);
-		print_value(&x, sep);
+		print_value(&x, out, sep);
 		break;
 	}
 	case OBJ_UPVALUE: {
-		printf("Upvalue%s", sep);
+		fprintf(out,  "Upvalue%s", sep);
 		break;
 	}
 	case OBJ_CLOSURE: {
 		obj_to_value(obj, TYPE_CLOSURE, &x);
-		print_value(&x, sep);
+		print_value(&x, out, sep);
 		break;
 	}
 	case OBJ_FUNCTION: {
 		obj_to_value(obj, TYPE_FUNCTION, &x);
-		print_value(&x, sep);
+		print_value(&x, out, sep);
 		break;
 	}
 	case OBJ_NATIVE_FN: {
 		obj_to_value(obj, TYPE_NATIVE, &x);
-		print_value(&x, sep);
+		print_value(&x, out, sep);
 		break;
 	}
 	case OBJ_TABLE: {
 		obj_to_value(obj, TYPE_TABLE, &x);
-		print_value(&x, sep);
+		print_value(&x, out, sep);
 		break;
 	}
 	default:
-		fprintf(stderr, "print_object: Unimplemented for type %d!",
+		fprintf(out,  "print_object: Unimplemented for type %d!",
 			obj->type);
 		break;
 	}
 }
 
-void print_value(Value *v, const char *sep)
+void print_value(Value *v, FILE *out, const char *sep)
 {
 	if (max_print_recursion-- <= 0) {
-		fprintf(stderr, "print_value recursion too deep.\n");
+		fprintf(out,  "print_value recursion too deep.\n");
 		exit(8);
 	}
 
 	switch (v->type) {
 	case TYPE_NIL:
-		printf("nil%s", sep);
+		fprintf(out, "nil%s", sep);
 		break;
 	case TYPE_BOOL:
-		printf("%s%s", v->data.boolean ? "true" : "false", sep);
+		fprintf(out, "%s%s", v->data.boolean ? "true" : "false", sep);
 		break;
 	case TYPE_NUMBER:
-		printf("%g%s", v->data.number, sep);
+		fprintf(out, "%g%s", v->data.number, sep);
 		break;
 	case TYPE_STRING:
-		printf("\"%s\"%s", (v->data.string)->chars, sep);
+		fprintf(out, "\"%s\"%s", (v->data.string)->chars, sep);
 		break;
 	case TYPE_KEYWORD:
-		printf(":%s%s", (v->data.string)->chars, sep);
+		fprintf(out, ":%s%s", (v->data.string)->chars, sep);
 		break;
 	case TYPE_SYMBOL:
-		printf("%s%s", (v->data.string)->chars, sep);
+		fprintf(out, "%s%s", (v->data.string)->chars, sep);
 		break;
 	case TYPE_TUPLE:
 	case TYPE_ARRAY: {
 		Array *form = AS_ARRAY(*v);
 		int len = form->count;
 		if (len == 0) {
-			printf("()%s", sep);
+			fprintf(out, "()%s", sep);
 			break;
 		}
-		printf("%s", (v->type == TYPE_TUPLE) ? "(" : "[");
+		fprintf(out, "%s", (v->type == TYPE_TUPLE) ? "(" : "[");
 		for (int i = 0; i < len - 1; i++) {
-			print_value(&form->values[i], " ");
+			print_value(&form->values[i], out, " ");
 		}
-		print_value(&form->values[len - 1], "");
-		printf("%s%s",
+		print_value(&form->values[len - 1], out, "");
+		fprintf(out, "%s%s",
 		       (v->type == TYPE_TUPLE) ? ")" : "]", sep);
 		break;
 	}
 	case TYPE_FUNCTION:
-		print_function(v->data.func, sep);
+		print_function(v->data.func, out, sep);
 		break;
 	case TYPE_CLOSURE:
-		print_function(v->data.closure->function, sep);
+		print_function(v->data.closure->function, out, sep);
 		break;
 	case TYPE_TABLE:
-		printf("TYPE_TABLE%s", sep);
+		fprintf(out, "TYPE_TABLE%s", sep);
 		break;
 	default:
-		fprintf(stderr, "print_value: Unimplemented print for type: %s!\n", type_string(v->type));
+		fprintf(stderr,  "print_value: Unimplemented print for type: %s!\n", type_string(v->type));
+		break;
+	}
+}
+
+void dump_ast(Value *v, FILE *out, const char *sep)
+{
+	if (max_print_recursion-- <= 0) {
+		fprintf(stderr,  "print_value recursion too deep.\n");
+		exit(8);
+}
+
+	switch (v->type) {
+	case TYPE_NIL:
+	fprintf(out, "Nil%s", sep);
+		break;
+	case TYPE_BOOL:
+		fprintf(out, "Bool(%s)%s", v->data.boolean ? "true" : "false", sep);
+		break;
+	case TYPE_NUMBER:
+		fprintf(out, "Number(%g)%s", v->data.number, sep);
+		break;
+	case TYPE_STRING:
+		fprintf(out, "String(\"%s\")%s", (v->data.string)->chars, sep);
+		break;
+	case TYPE_KEYWORD:
+		fprintf(out, "Keyword(:%s)%s", (v->data.string)->chars, sep);
+		break;
+	case TYPE_SYMBOL:
+		fprintf(out, "Symbol(%s)%s", (v->data.string)->chars, sep);
+		break;
+	case TYPE_TUPLE:
+	case TYPE_ARRAY: {
+		Array *form = AS_ARRAY(*v);
+		int len = form->count;
+		if (len == 0) {
+			fprintf(out, "Array([])%s", sep);
+			break;
+		}
+		fprintf(out, "%s", (v->type == TYPE_TUPLE) ? "Tuple((" : "Array([");
+		for (int i = 0; i < len - 1; i++) {
+			dump_ast(&form->values[i], out, " ");
+		}
+		dump_ast(&form->values[len - 1], out, "");
+		fprintf(out, "%s%s",
+		       (v->type == TYPE_TUPLE) ? "))" : "])", sep);
+		break;
+	}
+	case TYPE_FUNCTION:
+		print_function(v->data.func, out, sep);
+		break;
+	case TYPE_CLOSURE:
+		print_function(v->data.closure->function, out, sep);
+		break;
+	case TYPE_TABLE:
+		fprintf(out, "TYPE_TABLE%s", sep);
+		break;
+	default:
+		fprintf(stderr,  "dump_ast: Unimplemented print for type: %s!\n", type_string(v->type));
 		break;
 	}
 }

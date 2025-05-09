@@ -155,8 +155,8 @@ static bool call_value(VM *vm, Value callable, uint8_t argn)
 static Upvalue *capture_upvalue(VM *vm, Value *local)
 {
 #ifdef DEBUG_TRACE_EXECUTION
-	printf("capturing upvalue: ");
-	print_value(local, "\n");
+	fprintf(stderr, "capturing upvalue: ");
+	print_value(local, stderr, "\n");
 #endif /* DEBUG_TRACE_EXECUTION */
 	Upvalue *prev_upvalue = NULL;
 	Upvalue *upvalue = vm->open_upvalues;
@@ -312,15 +312,15 @@ do {									\
 
 	for (;;) {
 	#ifdef DEBUG_TRACE_EXECUTION
-		printf("	");
+		fprintf(stderr, "	");
 		for (Value *slot = vm->stack.values;
 		     slot < vm->stack.stack_top;
 		     slot++) {
-			printf("[ ");
-			print_value(slot, "");
-			printf(" ]");
+			fprintf(stderr, "[ ");
+			print_value(slot, stderr, "");
+			fprintf(stderr, " ]");
 		}
-		printf("\n");
+		fprintf(stderr, "\n");
 
 		disassemble_instruction(&frame->closure->function->chunk,
 				        (int)(frame->ip - frame->closure->function->chunk.code));
@@ -531,7 +531,7 @@ do {									\
 		}
 		case OP_PRINT: {
 			Value v = pop(vm);
-			print_value(&v, "\n");
+			print_value(&v, stdout, "\n");
 			PUSH(NIL_VAL);
 			break;
 		}

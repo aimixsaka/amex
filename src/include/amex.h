@@ -111,8 +111,9 @@ void mark_object(VM *vm, GCObject *obj);
 void obj_to_value(GCObject *obj, ValueType t, Value *x);
 GCObject *value_to_obj(Value *x);
 bool value_eq(Value v1, Value v2);
-void print_object(GCObject *obj, const char *sep);
-void print_value(Value *v, const char *sep);
+void print_object(GCObject *obj, FILE *out, const char *sep);
+void print_value(Value *v, FILE *out, const char *sep);
+void dump_ast(Value *v, FILE *out, const char *sep);
 const char *type_string(ValueType t);
 const char *obj_type_string(GCObject* obj);
 

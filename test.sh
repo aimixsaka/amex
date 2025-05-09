@@ -22,14 +22,15 @@ error() {
 }
 
 target_exec=$1
+test_file=$2
 
 declare -a test_cases
-test_cases=$(find $(dirname $0)/tests -type f -name '*.amex')
+test_cases=${test_file:=$(find $(dirname $0)/tests -type f -name '*.amex')}
 
 for test_case in ${test_cases[@]}; do
   info "Testing: $test_case..."
   expect="$(sed -nE 's/.*#.*expect: (.*)/\1/p' $test_case)"
-  got="$($target_exec $test_case 2>&1)"
+  got="$($target_exec $test_case)"
   if ! [ "$expect" = "$got" ]; then
     error "\nexpect:\n"
     error "$expect\n"

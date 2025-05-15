@@ -8,6 +8,18 @@
 (def -- :macro (fn [x]
 	~(set ,x (- ,x 1))))
 
+(def -= :macro (fn [x y]
+	~(set ,x (- ,x ,y))))
+
+(def += :macro (fn [x y]
+	~(set ,x (+ ,x ,y))))
+
+(def *= :macro (fn [x y]
+	~(set ,x (* ,x ,y))))
+
+(def /= :macro (fn [x y]
+	~(set ,x (/ ,x ,y))))
+
 (def defmacro :macro
   (fn [name args & body]
     ~(def ,name :macro (fn ,name ,args ,;body))))

@@ -14,7 +14,7 @@ static GCObject *allocate_object(VM *vm, size_t size, ObjType type)
 	vm->objects = object;
 
 #ifdef DEBUG_LOG_GC
-	printf("%p allocate %zu for %d\n", (void *)object, size, type);
+	fprintf(stderr, "%p allocate %zu for %d\n", (void *)object, size, type);
 #endif /* DEBUG_LOG_GC */
 
 	return object;

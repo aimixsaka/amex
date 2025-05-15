@@ -14,8 +14,8 @@ void mark_object(VM *vm, GCObject *obj)
 	if (obj->is_marked)
 		return;
 #ifdef DEBUG_LOG_GC
-	printf("mark %p, type %s: ", (void*)obj, obj_type_string(obj));
-	print_object(obj, "\n");
+	fprintf(stderr, "mark %p, type %s: ", (void*)obj, obj_type_string(obj));
+	print_object(obj, stderr, "\n");
 #endif /* DEBUG_LOG_GC */
 	obj->is_marked = true;
 	if (vm->gray_capacity < vm->gray_count + 1) {
@@ -79,8 +79,8 @@ static void mark_array(VM *vm, Array *arr)
 
 static void blacken_object(VM *vm, GCObject *obj) {
 #ifdef DEBUG_LOG_GC
-	printf("blacken %p, type %s: ", (void*)obj, obj_type_string(obj));
-	print_object(obj, "\n");
+	fprintf(stderr, "blacken %p, type %s: ", (void*)obj, obj_type_string(obj));
+	print_object(obj, stderr, "\n");
 #endif /* DEBUG_LOG_GC */
 	switch (obj->type) {
 	case OBJ_ARRAY:
@@ -145,7 +145,7 @@ static void sweep(VM *vm)
 void collect_garbage(VM *vm)
 {
 #ifdef DEBUG_LOG_GC
-	printf("-- gc begin\n");
+	fprintf(stderr, "-- gc begin\n");
 	size_t before = vm->bytes_allocated;
 #endif
 	/* mark all gc roots as gray */
@@ -163,9 +163,9 @@ void collect_garbage(VM *vm)
 	/* adjust next_GC based on still alive object bytes */
 	vm->next_GC = vm->bytes_allocated * GC_HEAP_GROW_FACTOR;
 #ifdef DEBUG_LOG_GC
-	printf("   collected %zu bytes (from %zu to %zu), next at %zu\n",
+	fprintf(stderr, "   collected %zu bytes (from %zu to %zu), next at %zu\n",
 		before - vm->bytes_allocated, before, vm->bytes_allocated,
 		vm->next_GC);
-	printf("-- gc end\n");
+	fprintf(stderr, "-- gc end\n");
 #endif /* DEBUG_LOG_GC */
 }

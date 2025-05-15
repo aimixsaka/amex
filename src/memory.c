@@ -36,8 +36,8 @@ void *reallocate(VM *vm, void *pointer, size_t old_size, size_t new_size)
 void free_object(VM *vm, GCObject *object)
 {
 #ifdef DEBUG_LOG_GC
-	printf("free %p, type %s: ", object, obj_type_string(object));
-	print_object(object, "\n");
+	fprintf(stderr, "free %p, type %s: ", object, obj_type_string(object));
+	print_object(object, stderr, "\n");
 #endif /* DEBUG_LOG_GC */
 
 	switch (object->type) {

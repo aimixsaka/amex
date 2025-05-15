@@ -2,7 +2,7 @@
 #include "include/amexconf.h"
 #include <stdio.h>
 
-static int max_print_recursion = 100000;
+static uint32_t max_print_recursion = 100000000;
 
 static void print_function(Function *f, FILE *out, const char *sep)
 {

@@ -383,7 +383,7 @@ static int main_state(Parser *p, char c)
 		return 1;
 	if (is_special_char(c)) {
 		parser_push(p, PTYPE_SPECIAL_FORM);
-		String *qs;
+		String *qs = NULL;
 		Value v;
 		v.type = TYPE_SYMBOL;
 		ParseState *top = parser_peek(p);
